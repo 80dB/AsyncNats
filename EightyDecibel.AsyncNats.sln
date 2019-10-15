@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AsyncNats", "AsyncNats\Asyn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleAsyncNatsSample", "SimpleAsyncNatsSample\SimpleAsyncNatsSample.csproj", "{819DB266-32D1-4D5A-904F-6A59DAC936AB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncNats.Tests", "AsyncNats.Tests\AsyncNats.Tests.csproj", "{38EFCB55-32DB-4155-A51B-12795D75B1DC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{819DB266-32D1-4D5A-904F-6A59DAC936AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{819DB266-32D1-4D5A-904F-6A59DAC936AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{819DB266-32D1-4D5A-904F-6A59DAC936AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38EFCB55-32DB-4155-A51B-12795D75B1DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38EFCB55-32DB-4155-A51B-12795D75B1DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38EFCB55-32DB-4155-A51B-12795D75B1DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38EFCB55-32DB-4155-A51B-12795D75B1DC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

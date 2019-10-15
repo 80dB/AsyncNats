@@ -13,8 +13,8 @@
 
         public static INatsServerMessage? ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
-            if (line.Length == 4) return new NatsError();
-            var error = line.Slice(6, line.Length - 7); // Remove "-ERR ''"
+            if (line.Length == 6) return new NatsError();
+            var error = line.Slice(6, line.Length - 9); // Remove "-ERR ''"
             return new NatsError {Error = Encoding.UTF8.GetString(error)};
         }
     }
