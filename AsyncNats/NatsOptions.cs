@@ -1,0 +1,16 @@
+﻿namespace EightyDecibel.AsyncNats
+{
+    using System.IO.Pipelines;
+    using System.Net;
+
+    public class NatsOptions : INatsOptions
+    {
+        public IPEndPoint Server { get; set; } = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4222);
+        public int SenderQueueLength { get; set; } = 5000;
+        public PipeOptions SenderPipeOptions { get; set; } = new PipeOptions();
+        public int ReceiverQueueLength { get; set; } = 5000;
+        public PipeOptions ReceiverPipeOptions { get; set; } = new PipeOptions();
+        public int FlushAtLeastEvery { get; set; } = 500;
+        public INatsSerializer Serializer { get; set; } = new NatsDefaultSerializer();
+    }
+}
