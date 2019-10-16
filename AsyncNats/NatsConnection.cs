@@ -15,7 +15,7 @@
     using EightyDecibel.AsyncNats.Channels;
     using EightyDecibel.AsyncNats.Messages;
 
-    public class NatsConnection : INatsConnection, IAsyncDisposable
+    public class NatsConnection : INatsConnection
     {
         private static long _nextSubscriptionId = 1;
 
@@ -45,14 +45,14 @@
             _dispatchTask = Dispatcher(_disposeTokenSource.Token);
         }
 
-        public Task ConnectAsync()
+        public ValueTask ConnectAsync()
         {
             if (_disposeTokenSource.IsCancellationRequested) throw new ObjectDisposedException("Connection already disposed");
             if (_disconnectSource != null) throw new InvalidAsynchronousStateException("Already connected");
 
             _disconnectSource = new CancellationTokenSource();
             _readWriteAsyncTask = ReadWriteAsync(_disconnectSource.Token);
-            return Task.CompletedTask;
+            return new ValueTask();
         }
 
         private async Task ReadWriteAsync(CancellationToken disconnectToken)
@@ -240,7 +240,7 @@
             }
         }
 
-        public async Task DisconnectAsync()
+        public async ValueTask DisconnectAsync()
         {
             if (_disposeTokenSource.IsCancellationRequested) throw new ObjectDisposedException("Connection already disposed");
             try
@@ -307,7 +307,7 @@
             return channel;
         }
 
-        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) where T : class
+        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) 
         {
             var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
             await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
