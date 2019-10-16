@@ -1,15 +1,20 @@
 ﻿namespace EightyDecibel.AsyncNats.Channels
 {
     using System;
-    using System.Threading.Tasks;
+    using System.Collections.Generic;
     using EightyDecibel.AsyncNats.Messages;
 
-    internal interface INatsChannel : IAsyncDisposable
+    public interface INatsChannel : IAsyncEnumerable<INatsServerMessage>, IAsyncDisposable
     {
-        string? Subject { get; set; }
-        string? QueueGroup { get; set; }
-        string SubscriptionId { get; set; }
+        string? Subject { get; }
+        string? QueueGroup { get; }
+        string SubscriptionId { get; }
+    }
 
-        ValueTask Publish(INatsServerMessage message);
+    public interface INatsChannel<T> : IAsyncEnumerable<NatsTypedMsg<T>>, IAsyncDisposable
+    {
+        string? Subject { get; }
+        string? QueueGroup { get; }
+        string SubscriptionId { get; }
     }
 }

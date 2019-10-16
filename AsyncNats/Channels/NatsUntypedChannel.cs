@@ -2,20 +2,19 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
 
-    internal class NatsUntypedChannel : IAsyncEnumerable<INatsServerMessage>, INatsChannel
+    internal class NatsUntypedChannel : INatsChannel, INatsInternalChannel
     {
         private readonly NatsConnection _parent;
         private readonly Channel<INatsServerMessage> _channel;
 
-        public string? Subject { get; set; }
-        public string? QueueGroup { get; set; }
-        public string SubscriptionId { get; set; }
+        public string? Subject { get; }
+        public string? QueueGroup { get; }
+        public string SubscriptionId { get; }
 
         internal NatsUntypedChannel(NatsConnection parent, string? subject, string? queueGroup, string subscriptionId)
         {
@@ -34,7 +33,7 @@
 
         public ValueTask DisposeAsync()
         {
-            return _parent.Unsubscribe(this);
+            return _parent.Unsubscribe(this as INatsInternalChannel);
         }
 
         public async IAsyncEnumerator<INatsServerMessage> GetAsyncEnumerator(CancellationToken cancellationToken = default(CancellationToken))
@@ -47,9 +46,8 @@
                 {
                     message = await reader.ReadAsync(cancellationToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    Debug.WriteLine($"Exception {ex}");
                     yield break;
                 }
 
@@ -78,7 +76,7 @@
                     {
                         yield return message;
                     }
-                } while (reader.TryRead(out message));
+                } while (reader.TryRead(out message) && !cancellationToken.IsCancellationRequested);
             }
         }
     }

@@ -2,21 +2,20 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
 
-    internal class NatsTypedChannel<T> : IAsyncEnumerable<NatsTypedMsg<T>>, INatsChannel where T : class
+    internal class NatsTypedChannel<T> : INatsChannel<T>, INatsInternalChannel
     {
         private readonly NatsConnection _parent;
         private readonly Channel<INatsServerMessage> _channel;
         private readonly INatsSerializer _serializer;
 
-        public string? Subject { get; set; }
-        public string? QueueGroup { get; set; }
-        public string SubscriptionId { get; set; }
+        public string? Subject { get; }
+        public string? QueueGroup { get; }
+        public string SubscriptionId { get; }
 
         internal NatsTypedChannel(NatsConnection parent, string subject, string? queueGroup, string subscriptionId, INatsSerializer serializer)
         {
@@ -36,7 +35,7 @@
 
         public ValueTask DisposeAsync()
         {
-            return _parent.Unsubscribe(this);
+            return _parent.Unsubscribe(this as INatsInternalChannel);
         }
 
         public async IAsyncEnumerator<NatsTypedMsg<T>> GetAsyncEnumerator(CancellationToken cancellationToken = default(CancellationToken))
@@ -49,9 +48,8 @@
                 {
                     message = await reader.ReadAsync(cancellationToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    Debug.WriteLine($"Exception {ex}");
                     yield break;
                 }
 
@@ -73,7 +71,7 @@
                     {
                         msg.Release();
                     }
-                } while (reader.TryRead(out message));
+                } while (reader.TryRead(out message) && !cancellationToken.IsCancellationRequested);
             }
         }
     }

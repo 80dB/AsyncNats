@@ -9,7 +9,6 @@
     using System.IO.Pipelines;
     using System.Linq;
     using System.Net.Sockets;
-    using System.Runtime.InteropServices.ComTypes;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
@@ -24,7 +23,7 @@
         private CancellationTokenSource? _disconnectSource;
         private Channel<byte[]> _senderChannel;
         private Channel<INatsServerMessage> _receiverChannel;
-        private ConcurrentDictionary<string, INatsChannel> _channels;
+        private ConcurrentDictionary<string, INatsInternalChannel> _channels;
 
         private Task _dispatchTask;
         private CancellationTokenSource _disposeTokenSource;
@@ -41,7 +40,7 @@
 
             _senderChannel = Channel.CreateBounded<byte[]>(Options.SenderQueueLength);
             _receiverChannel = Channel.CreateBounded<INatsServerMessage>(Options.ReceiverQueueLength);
-            _channels = new ConcurrentDictionary<string, INatsChannel>();
+            _channels = new ConcurrentDictionary<string, INatsInternalChannel>();
             _disposeTokenSource= new CancellationTokenSource();
             _dispatchTask = Dispatcher(_disposeTokenSource.Token);
         }
@@ -299,7 +298,7 @@
             return channel;
         }
 
-        public async ValueTask<IAsyncEnumerable<INatsServerMessage>> Subscribe(string subject, string? queueGroup = null)
+        public async ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null)
         {
             var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
             await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
@@ -308,7 +307,7 @@
             return channel;
         }
 
-        public async ValueTask<IAsyncEnumerable<NatsTypedMsg<T>>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) where T : class
+        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) where T : class
         {
             var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
             await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
@@ -317,8 +316,19 @@
             return channel;
         }
 
-        internal async ValueTask Unsubscribe(INatsChannel channel)
+        public ValueTask Unsubscribe<T>(INatsChannel<T> channel)
         {
+            return Unsubscribe(channel as INatsInternalChannel);
+        }
+
+        public ValueTask Unsubscribe(INatsChannel channel)
+        {
+            return Unsubscribe(channel as INatsInternalChannel);
+        }
+
+        internal async ValueTask Unsubscribe(INatsInternalChannel? channel)
+        {
+            if (channel == null) return;
             if (!_channels.TryRemove(channel.SubscriptionId, out var dummy)) return;
             if (string.IsNullOrEmpty(channel.Subject)) return;
 

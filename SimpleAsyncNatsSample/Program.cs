@@ -24,9 +24,12 @@
             Console.ReadKey();
 
             cancellation.Cancel();
-            await connection.DisconnectAsync();
             await readerTypedTask;
             await writerTask;
+
+            Console.ReadKey();
+
+            await connection.DisconnectAsync();
         }
 
         static async Task ReaderTyped(NatsConnection connection, CancellationToken cancellationToken)
@@ -34,7 +37,7 @@
             var history = new Queue<(int count, long time)>();
             var counter = 0;
             var prev = 0;
-            var messages = await connection.Subscribe<string>("HELLO");
+            await using var messages = await connection.Subscribe<string>("HELLO");
             var watch = Stopwatch.StartNew();
             await foreach (var message in messages.WithCancellation(cancellationToken))
             {
