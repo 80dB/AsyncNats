@@ -33,7 +33,7 @@
         public string Lang { get; set; } = "C#";
 
         [JsonPropertyName("version")]
-        public string Version { get; set; } = "0.0.1";
+        public string Version { get; set; }
 
         [JsonPropertyName("protocol")]
         public int Protocol { get; set; } = 1;
@@ -42,9 +42,12 @@
         public bool Echo { get; set; }
 
         public NatsConnect()
-        { }
+        {
+            Version = GetType().Assembly.GetName().Version.ToString();
+        }
 
         public NatsConnect(INatsOptions options)
+            : this()
         {
             Verbose = options.Verbose;
 
