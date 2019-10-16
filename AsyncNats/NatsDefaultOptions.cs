@@ -3,7 +3,7 @@
     using System.IO.Pipelines;
     using System.Net;
 
-    public class NatsOptions : INatsOptions
+    public class NatsDefaultOptions : INatsOptions
     {
         public IPEndPoint Server { get; set; } = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4222);
         public int SenderQueueLength { get; set; } = 5000;

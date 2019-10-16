@@ -15,7 +15,7 @@
     using EightyDecibel.AsyncNats.Channels;
     using EightyDecibel.AsyncNats.Messages;
 
-    public class NatsConnection : IAsyncDisposable
+    public class NatsConnection : INatsConnection, IAsyncDisposable
     {
         private static long _nextSubscriptionId = 1;
 
@@ -31,7 +31,7 @@
         public INatsOptions Options { get; }
 
         public NatsConnection()
-            : this(new NatsOptions())
+            : this(new NatsDefaultOptions())
         { }
 
         public NatsConnection(INatsOptions options)

@@ -12,7 +12,7 @@
     {
         static async Task Main(string[] args)
         {
-            var options = new NatsOptions
+            var options = new NatsDefaultOptions
             {
                 Echo = true // Without echo this test does not work! On production you might want to keep it disabled
             };
