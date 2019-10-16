@@ -18,8 +18,16 @@
         [JsonPropertyName("tls_required")]
         public bool TlsRequired { get; set; }
 
+        [JsonPropertyName("auth_token")]
+        public string? AuthorizationToken { get; set; }
+        [JsonPropertyName("user")]
+        public string? Username { get; set; }
+        [JsonPropertyName("pass")]
+        public string? Password { get; set; }
+
+
         [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; } = "AsyncNats";
 
         [JsonPropertyName("lang")]
         public string Lang { get; set; } = "C#";
@@ -30,9 +38,26 @@
         [JsonPropertyName("protocol")]
         public int Protocol { get; set; } = 1;
 
+        [JsonPropertyName("echo")]
+        public bool Echo { get; set; }
+
+        public NatsConnect()
+        { }
+
+        public NatsConnect(INatsOptions options)
+        {
+            Verbose = options.Verbose;
+
+            AuthorizationToken = options.AuthorizationToken;
+            Username = options.Username;
+            Password = options.Password;
+
+            Echo = options.Echo;
+        }
+
         public static byte[] RentedSerialize(NatsConnect msg)
         {
-            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg);
+            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions { IgnoreNullValues = true });
             var buffer = ArrayPool<byte>.Shared.Rent(serialized.Length + _command.Length + _end.Length + 4);
             
             var consumed = 4;

@@ -12,7 +12,10 @@
     {
         static async Task Main(string[] args)
         {
-            var options = new NatsOptions();
+            var options = new NatsOptions
+            {
+                Echo = true // Without echo this test does not work! On production you might want to keep it disabled
+            };
             options.Serializer = new NatsAsciiSerializer();
             var connection = new NatsConnection(options);
             var cancellation = new CancellationTokenSource();

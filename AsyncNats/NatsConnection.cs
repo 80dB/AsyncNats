@@ -192,7 +192,7 @@
 
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
         {
-            var connect = new NatsConnect();
+            var connect = new NatsConnect(Options);
             var buffer = NatsConnect.RentedSerialize(connect);
             var consumed = BitConverter.ToInt32(buffer);
             await socket.SendAsync(buffer.AsMemory(4, consumed), SocketFlags.None, disconnectToken);

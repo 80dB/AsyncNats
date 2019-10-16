@@ -4,8 +4,6 @@
     using System.Buffers;
     using System.Text;
     using EightyDecibel.AsyncNats.Messages;
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
     using Xunit;
 
     public class NatsConnect_SerializeShould

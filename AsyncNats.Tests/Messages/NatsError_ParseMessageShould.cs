@@ -31,7 +31,7 @@
         public void WorkWithoutMessage()
         {
             var reader = new SequenceReader<byte>();
-            var err = (NatsError)NatsError.ParseMessage(_withErrorMessage.Span, ref reader);
+            var err = (NatsError)NatsError.ParseMessage(_withoutErrorMessage.Span, ref reader);
             Assert.Null(err.Error);
         }
     }

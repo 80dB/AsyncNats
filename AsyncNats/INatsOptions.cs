@@ -16,5 +16,13 @@
         int FlushAtLeastEvery { get; }
 
         INatsSerializer Serializer { get; }
+
+        bool Verbose { get; }
+
+        string? AuthorizationToken { get; }
+        string? Username { get; }
+        string? Password { get; }
+
+        bool Echo { get; }
     }
 }

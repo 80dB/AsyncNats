@@ -12,5 +12,10 @@
         public PipeOptions ReceiverPipeOptions { get; set; } = new PipeOptions();
         public int FlushAtLeastEvery { get; set; } = 500;
         public INatsSerializer Serializer { get; set; } = new NatsDefaultSerializer();
+        public bool Verbose { get; set; }
+        public string? AuthorizationToken { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public bool Echo { get; set; }
     }
 }
