@@ -3,6 +3,7 @@
     using System;
     using System.Buffers;
     using System.Text;
+    using System.Text.Json;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 
@@ -45,7 +46,7 @@
             text = text.Replace("CONNECT ", "");
             text = text.Replace("\r\n", "");
 
-            Assert.Equal(text, System.Text.Json.JsonSerializer.Serialize(_connect));
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(_connect, new JsonSerializerOptions { IgnoreNullValues = true }), text);
             ArrayPool<byte>.Shared.Return(rented);
         }
     }

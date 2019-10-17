@@ -11,7 +11,7 @@
         private static readonly  ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly  ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        public static byte[] RentedSerialize(string subject, string? replyTo, byte[]? payload)
+        public static byte[] RentedSerialize(string subject, string? replyTo, ReadOnlyMemory<byte> payload)
         {
             var hint = 4;
             hint += _command.Length; // PUB
@@ -19,7 +19,7 @@
             hint += replyTo?.Length + 1 ?? 0; // ReplyTo
             hint += 7; // Max payload size (1MB)
             hint += _end.Length; // Ending
-            hint += payload?.Length ?? 0;
+            hint += payload.Length;
             hint += _end.Length; // Ending Payload
 
             var buffer = ArrayPool<byte>.Shared.Rent(hint);
@@ -37,13 +37,13 @@
                 consumed++;
             }
 
-            Utf8Formatter.TryFormat(payload?.Length ?? 0, buffer.AsSpan(consumed), out var written);
+            Utf8Formatter.TryFormat(payload.Length, buffer.AsSpan(consumed), out var written);
             consumed += written;
             _end.CopyTo(buffer.AsMemory(consumed));
             consumed += _end.Length;
-            if (payload != null)
+            if (!payload.IsEmpty)
             {
-                payload.CopyTo(buffer.AsSpan(consumed));
+                payload.CopyTo(buffer.AsMemory(consumed));
                 consumed += payload.Length;
             }
 

@@ -9,6 +9,7 @@
     using System.IO.Pipelines;
     using System.Linq;
     using System.Net.Sockets;
+    using System.Text;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
@@ -278,16 +279,25 @@
             _disposeTokenSource.Dispose();
         }
 
-        public ValueTask PublishAsync<T>(string subject, T payload, string? replyTo = null)
+        public ValueTask PublishTextAsync(string subject, string text, string? replyTo = null)
+        {
+            return PublishMemoryAsync(subject, Encoding.UTF8.GetBytes(text), replyTo); 
+        }
+
+        public ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null)
         {
             return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo);
         }
 
-        public async ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null)
+        public ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null)
+        {
+            return PublishMemoryAsync(subject, payload?.AsMemory() ?? ReadOnlyMemory<byte>.Empty, replyTo);
+        }
+
+        public ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null)
         {
             var pub = NatsPub.RentedSerialize(subject, replyTo, payload);
-            if (!_senderChannel.Writer.TryWrite(pub))
-                await _senderChannel.Writer.WriteAsync(pub);
+            return !_senderChannel.Writer.TryWrite(pub) ? _senderChannel.Writer.WriteAsync(pub) : new ValueTask();
         }
 
         public IAsyncEnumerable<INatsServerMessage> SubscribeAll()
@@ -303,6 +313,15 @@
             var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
             await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
             var channel = new NatsUntypedChannel(this, subject, queueGroup, subscriptionId);
+            _channels[subscriptionId] = channel;
+            return channel;
+        }
+
+        public async ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null)
+        {
+            var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
+            await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
+            var channel = new NatsTextChannel(this, subject, queueGroup, subscriptionId);
             _channels[subscriptionId] = channel;
             return channel;
         }

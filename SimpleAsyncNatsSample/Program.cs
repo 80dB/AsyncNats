@@ -40,7 +40,7 @@
             var history = new Queue<(int count, long time)>();
             var counter = 0;
             var prev = 0;
-            await using var messages = await connection.Subscribe<string>("HELLO");
+            await using var messages = await connection.SubscribeText("HELLO");
             var watch = Stopwatch.StartNew();
             await foreach (var message in messages.WithCancellation(cancellationToken))
             {
@@ -63,7 +63,7 @@
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await connection.PublishAsync("HELLO", payload: "HELLO WORLD");
+                await connection.PublishTextAsync("HELLO", "HELLO WORLD");
             }
         }
     }
