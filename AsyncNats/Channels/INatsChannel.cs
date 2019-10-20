@@ -17,4 +17,11 @@
         string? QueueGroup { get; }
         string SubscriptionId { get; }
     }
+
+    public interface INatsObjectChannel<out T> : IAsyncEnumerable<T>, IAsyncDisposable
+    {
+        string? Subject { get; }
+        string? QueueGroup { get; }
+        string SubscriptionId { get; }
+    }
 }

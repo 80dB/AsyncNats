@@ -309,10 +309,16 @@
             return channel;
         }
 
-        public async ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null)
+        private async ValueTask<string> SendSubscribe(string subject, string? queueGroup)
         {
             var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
             await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
+            return subscriptionId;
+        }
+
+        public async ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null)
+        {
+            var subscriptionId = await SendSubscribe(subject, queueGroup);
             var channel = new NatsUntypedChannel(this, subject, queueGroup, subscriptionId);
             _channels[subscriptionId] = channel;
             return channel;
@@ -320,8 +326,7 @@
 
         public async ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null)
         {
-            var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
-            await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
+            var subscriptionId = await SendSubscribe(subject, queueGroup); 
             var channel = new NatsTextChannel(this, subject, queueGroup, subscriptionId);
             _channels[subscriptionId] = channel;
             return channel;
@@ -329,30 +334,33 @@
 
         public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) 
         {
-            var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
-            await _senderChannel.Writer.WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId));
+            var subscriptionId = await SendSubscribe(subject, queueGroup); 
             var channel = new NatsTypedChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
             _channels[subscriptionId] = channel;
             return channel;
         }
 
-        public ValueTask Unsubscribe<T>(INatsChannel<T> channel)
+        public async ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null)
         {
-            return Unsubscribe(channel as INatsInternalChannel);
+            var subscriptionId = await SendSubscribe(subject, queueGroup); 
+            var channel = new NatsObjectChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
+            _channels[subscriptionId] = channel;
+            return channel;
         }
 
-        public ValueTask Unsubscribe(INatsChannel channel)
-        {
-            return Unsubscribe(channel as INatsInternalChannel);
-        }
+        public ValueTask Unsubscribe<T>(INatsObjectChannel<T> channel) => Unsubscribe(channel as INatsInternalChannel);
 
-        internal async ValueTask Unsubscribe(INatsInternalChannel? channel)
-        {
-            if (channel == null) return;
-            if (!_channels.TryRemove(channel.SubscriptionId, out var dummy)) return;
-            if (string.IsNullOrEmpty(channel.Subject)) return;
+        public ValueTask Unsubscribe<T>(INatsChannel<T> channel) => Unsubscribe(channel as INatsInternalChannel);
 
-            await _senderChannel.Writer.WriteAsync(NatsUnsub.RentedSerialize(channel.SubscriptionId, null));
+        public ValueTask Unsubscribe(INatsChannel channel) => Unsubscribe(channel as INatsInternalChannel);
+
+        internal ValueTask Unsubscribe(INatsInternalChannel? channel)
+        {
+            if (channel == null) return new ValueTask();
+            if (!_channels.TryRemove(channel.SubscriptionId, out var dummy)) return new ValueTask();
+            if (string.IsNullOrEmpty(channel.Subject)) return new ValueTask();
+
+            return _senderChannel.Writer.WriteAsync(NatsUnsub.RentedSerialize(channel.SubscriptionId, null));
         }
     }
 }

@@ -19,7 +19,9 @@
         IAsyncEnumerable<INatsServerMessage> SubscribeAll();
         ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null);
         ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null);
+        ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null);
         ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null);
+        ValueTask Unsubscribe<T>(INatsObjectChannel<T> channel);
         ValueTask Unsubscribe<T>(INatsChannel<T> channel);
         ValueTask Unsubscribe(INatsChannel channel);
     }
