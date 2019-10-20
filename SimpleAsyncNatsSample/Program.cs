@@ -32,7 +32,9 @@
 
             Console.ReadKey();
 
-            await connection.DisconnectAsync();
+            await connection.DisposeAsync();
+         
+            Console.ReadKey();
         }
 
         static async Task ReaderTyped(NatsConnection connection, CancellationToken cancellationToken)

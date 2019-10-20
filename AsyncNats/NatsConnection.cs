@@ -87,11 +87,8 @@
                 {
                     Task.WaitAny(new[] {readTask, processTask, serializeTask, writeTask}, disconnectToken);
                 }
-                catch(Exception ex)
-                {
-                    Debug.WriteLine($"Exception {ex}");
-                    // Not sure what can happen here, but at least stop after we catch it :)
-                }
+                catch(OperationCanceledException)
+                { }
 
                 internalDisconnect.Cancel();
                 await WaitAll(readTask, processTask, serializeTask, writeTask);
@@ -254,10 +251,8 @@
                 if (_readWriteAsyncTask != null)
                     await _readWriteAsyncTask;
             }
-            catch
-            {
-                // Ignore any disconnect issues
-            }
+            catch (OperationCanceledException)
+            { }
             finally
             {
                 _disconnectSource?.Dispose();
@@ -268,14 +263,20 @@
 
         public async ValueTask DisposeAsync()
         {
-            if (_disposeTokenSource.IsCancellationRequested) throw new ObjectDisposedException("Connection already disposed");
+            if (_disposeTokenSource.IsCancellationRequested) return;
 
             foreach (var channel in _channels.Values.ToArray())
                 await channel.DisposeAsync();
 
-            _disposeTokenSource.Cancel();
             await DisconnectAsync();
-            await _dispatchTask;
+
+            _disposeTokenSource.Cancel();
+            try
+            {
+                await _dispatchTask;
+            }
+            catch (OperationCanceledException)
+            { }
             _disposeTokenSource.Dispose();
         }
 
