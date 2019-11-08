@@ -1,6 +1,7 @@
 ﻿namespace RequestAsyncNatsSample
 {
     using System;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats;
@@ -26,6 +27,9 @@
             };
 
             var connection = new NatsConnection(options);
+            connection.ConnectionException += (sender, exception) => Console.WriteLine($"ConnectionException : {exception}");
+            connection.StatusChange += (sender, status) => Console.WriteLine($"Connection status changed to {status}");
+            connection.ConnectionInformation += (sender, information) => Console.WriteLine($"Connection information {JsonSerializer.Serialize(information)}");
             var cancellation = new CancellationTokenSource();
 
             var addListenerTask = AddListenerAsync(connection, cancellation.Token);

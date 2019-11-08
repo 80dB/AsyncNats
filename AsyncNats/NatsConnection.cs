@@ -26,10 +26,25 @@
         private Channel<INatsServerMessage> _receiverChannel;
         private ConcurrentDictionary<string, INatsInternalChannel> _channels;
 
+        private NatsStatus _status;
         private Task _dispatchTask;
         private CancellationTokenSource _disposeTokenSource;
 
         public INatsOptions Options { get; }
+
+        public NatsStatus Status
+        {
+            get => _status;
+            private set
+            {
+                _status = value;
+                StatusChange?.Invoke(this, value);
+            }
+        }
+
+        public event EventHandler<Exception>? ConnectionException;
+        public event EventHandler<NatsStatus>? StatusChange;
+        public event EventHandler<NatsInformation>? ConnectionInformation;
 
         public NatsConnection()
             : this(new NatsDefaultOptions())
@@ -60,6 +75,8 @@
         {
             while (!disconnectToken.IsCancellationRequested)
             {
+                Status = NatsStatus.Connecting;
+
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                 socket.NoDelay = true;
                 
@@ -71,7 +88,8 @@
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Exception {ex}");
+                    ConnectionException?.Invoke(this, ex);
+
                     await Task.Delay(TimeSpan.FromSeconds(1), disconnectToken);
                     continue;
                 }
@@ -85,10 +103,16 @@
                 var writeTask = WriteSocketAsync(socket, writePipe.Reader, internalDisconnect.Token);
                 try
                 {
+                    Status = NatsStatus.Connected;
                     Task.WaitAny(new[] {readTask, processTask, serializeTask, writeTask}, disconnectToken);
                 }
-                catch(OperationCanceledException)
-                { }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    ConnectionException?.Invoke(this, ex);
+                }
 
                 internalDisconnect.Cancel();
                 await WaitAll(readTask, processTask, serializeTask, writeTask);
@@ -107,8 +131,7 @@
                 { }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Unhandled exception {ex}");
-                    // Ignore (maybe log?)
+                    ConnectionException?.Invoke(this, ex);
                 }
             }
         }
@@ -225,6 +248,11 @@
                         await writer.WriteAsync(NatsPong.RentedSerialize(), disconnectToken);
                     }
 
+                    if (message is NatsInformation info)
+                    {
+                        ConnectionInformation?.Invoke(this, info);
+                    }
+
                     var msg = message as NatsMsg;
                     var subscriptionId = msg?.SubscriptionId;
                     foreach (var channel in _channels.Values)
@@ -258,6 +286,8 @@
                 _disconnectSource?.Dispose();
                 _readWriteAsyncTask = null;
                 _disconnectSource = null;
+
+                Status = NatsStatus.Disconnected;
             }
         }
 

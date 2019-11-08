@@ -4,6 +4,7 @@
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats;
@@ -18,6 +19,10 @@
             };
             options.Serializer = new NatsAsciiSerializer();
             var connection = new NatsConnection(options);
+            connection.ConnectionException += (sender, exception) => Console.WriteLine($"ConnectionException : {exception}");
+            connection.StatusChange += (sender, status) => Console.WriteLine($"Connection status changed to {status}");
+            connection.ConnectionInformation += (sender, information) => Console.WriteLine($"Connection information {JsonSerializer.Serialize(information)}");
+
             var cancellation = new CancellationTokenSource();
 
             var readerTypedTask = ReaderTyped(connection, cancellation.Token);
