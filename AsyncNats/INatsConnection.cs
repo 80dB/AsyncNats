@@ -28,6 +28,8 @@
         ValueTask Unsubscribe<T>(INatsChannel<T> channel);
         ValueTask Unsubscribe(INatsChannel channel);
 
+        Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
+        Task<ReadOnlyMemory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
         Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
         Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
     }

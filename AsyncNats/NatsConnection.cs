@@ -398,6 +398,35 @@
             return _senderChannel.Writer.WriteAsync(NatsUnsub.RentedSerialize(channel.SubscriptionId, null));
         }
 
+        public async Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            return (await RequestMemory(subject, request, timeout, cancellationToken)).ToArray();
+        }
+
+        public async Task<ReadOnlyMemory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
+            await using var replySubscription = await Subscribe(replyTo);
+            await PublishMemoryAsync(subject, request, replyTo);
+
+            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
+            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            try
+            {
+                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
+                {
+                    if (!(response is NatsMsg msg)) continue;
+                    return msg.Payload;
+                }
+            }
+            finally
+            {
+                linkedSource?.Dispose();
+            }
+
+            throw new TimeoutException();
+        }
+
         public async Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
