@@ -27,8 +27,18 @@
             Console.ReadKey();
 
             cancellation.Cancel();
-            await readerTypedTask;
-            await writerTask;
+            try
+            {
+                await readerTypedTask;
+            }
+            catch (OperationCanceledException)
+            { }
+            try
+            {
+                await writerTask;
+            }
+            catch (OperationCanceledException)
+            { }
 
             Console.ReadKey();
 

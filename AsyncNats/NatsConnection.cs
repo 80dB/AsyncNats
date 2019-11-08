@@ -362,5 +362,47 @@
 
             return _senderChannel.Writer.WriteAsync(NatsUnsub.RentedSerialize(channel.SubscriptionId, null));
         }
+
+        public async Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
+            await using var replySubscription = await SubscribeText(replyTo);
+            await PublishTextAsync(subject, request, replyTo);
+
+            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
+            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            try
+            {
+                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
+                    return response.Payload;
+            }
+            finally
+            {
+                linkedSource?.Dispose();
+            }
+
+            throw new TimeoutException();
+        }
+
+        public async Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
+            await using var replySubscription = await SubscribeObject<TResponse>(replyTo, serializer: serializer);
+            await PublishObjectAsync(subject, request, replyTo);
+            
+            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
+            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            try
+            {
+                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
+                    return response;
+            }
+            finally
+            {
+                linkedSource?.Dispose();
+            }
+
+            throw new TimeoutException();
+        }
     }
 }

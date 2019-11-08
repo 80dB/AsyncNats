@@ -1,5 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
+    using System;
     using System.IO.Pipelines;
     using System.Net;
 
@@ -24,5 +25,8 @@
         string? Password { get; }
 
         bool Echo { get; }
+
+        TimeSpan RequestTimeout { get; }
+        string RequestPrefix { get; }
     }
 }
