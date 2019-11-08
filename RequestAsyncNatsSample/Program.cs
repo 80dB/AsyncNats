@@ -46,19 +46,24 @@
                 await addListenerTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
+
             try
             {
                 await multiplyListenerTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
+
             try
             {
                 await senderTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
 
             Console.ReadKey();
 
@@ -78,7 +83,7 @@
         {
             await using var subscription = await connection.Subscribe<Request>("multiply");
             await foreach (var request in subscription.WithCancellation(cancellationToken))
-                await connection.PublishObjectAsync(request.ReplyTo, new Response { Result = request.Payload.X * request.Payload.Y });
+                await connection.PublishObjectAsync(request.ReplyTo, new Response {Result = request.Payload.X * request.Payload.Y});
         }
 
         static async Task SenderAsync(NatsConnection connection, CancellationToken cancellationToken)

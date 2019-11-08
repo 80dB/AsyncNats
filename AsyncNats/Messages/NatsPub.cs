@@ -7,9 +7,9 @@
 
     public class NatsPub
     {
-        private static readonly  ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("PUB "));
-        private static readonly  ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
-        private static readonly  ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
+        private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("PUB "));
+        private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
+        private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
         public static byte[] RentedSerialize(string subject, string? replyTo, ReadOnlyMemory<byte> payload)
         {
@@ -50,7 +50,7 @@
             _end.CopyTo(buffer.AsMemory(consumed));
             consumed += _end.Length;
 
-            BitConverter.TryWriteBytes(buffer, consumed-4);
+            BitConverter.TryWriteBytes(buffer, consumed - 4);
             return buffer;
         }
     }

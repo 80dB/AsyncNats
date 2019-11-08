@@ -37,18 +37,21 @@
                 await readerTypedTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
+
             try
             {
                 await writerTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
 
             Console.ReadKey();
 
             await connection.DisposeAsync();
-         
+
             Console.ReadKey();
         }
 
@@ -71,7 +74,7 @@
                 var count = history.Sum(h => h.count);
                 var time = history.Sum(h => h.time);
 
-                Console.WriteLine($"{message.GetType()} - {message.Payload} - {count / (double)time * 1000}");
+                Console.WriteLine($"{message.GetType()} - {message.Payload} - {count / (double) time * 1000}");
                 watch = Stopwatch.StartNew();
             }
         }

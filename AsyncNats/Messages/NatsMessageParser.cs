@@ -16,17 +16,18 @@
         private static readonly byte[] _pong = Encoding.UTF8.GetBytes("PONG");
 
         private delegate INatsServerMessage? ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader);
-        private static readonly Tuple<byte[], ParseMessage>[] _messageParsers = 
+
+        private static readonly Tuple<byte[], ParseMessage>[] _messageParsers =
         {
             new Tuple<byte[], ParseMessage>(_message, NatsMsg.ParseMessage),
             new Tuple<byte[], ParseMessage>(_ping, NatsPing.ParseMessage),
             new Tuple<byte[], ParseMessage>(_pong, NatsPong.ParseMessage),
             new Tuple<byte[], ParseMessage>(_ok, NatsOk.ParseMessage),
             new Tuple<byte[], ParseMessage>(_error, NatsError.ParseMessage),
-            new Tuple<byte[], ParseMessage>(_information, NatsInformation.ParseMessage),
+            new Tuple<byte[], ParseMessage>(_information, NatsInformation.ParseMessage)
         };
 
-        public List<INatsServerMessage>  ParseMessages(in ReadOnlySequence<byte> buffer, out long consumed)
+        public List<INatsServerMessage> ParseMessages(in ReadOnlySequence<byte> buffer, out long consumed)
         {
             var messages = new List<INatsServerMessage>();
             var reader = new SequenceReader<byte>(buffer);

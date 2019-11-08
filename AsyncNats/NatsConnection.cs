@@ -5,7 +5,6 @@
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Diagnostics;
     using System.IO.Pipelines;
     using System.Linq;
     using System.Net.Sockets;
@@ -48,7 +47,8 @@
 
         public NatsConnection()
             : this(new NatsDefaultOptions())
-        { }
+        {
+        }
 
         public NatsConnection(INatsOptions options)
         {
@@ -57,7 +57,7 @@
             _senderChannel = Channel.CreateBounded<byte[]>(Options.SenderQueueLength);
             _receiverChannel = Channel.CreateBounded<INatsServerMessage>(Options.ReceiverQueueLength);
             _channels = new ConcurrentDictionary<string, INatsInternalChannel>();
-            _disposeTokenSource= new CancellationTokenSource();
+            _disposeTokenSource = new CancellationTokenSource();
             _dispatchTask = Dispatcher(_disposeTokenSource.Token);
         }
 
@@ -79,7 +79,7 @@
 
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                 socket.NoDelay = true;
-                
+
                 using var internalDisconnect = new CancellationTokenSource();
 
                 try
@@ -128,7 +128,8 @@
                     await task;
                 }
                 catch (OperationCanceledException)
-                { }
+                {
+                }
                 catch (Exception ex)
                 {
                     ConnectionException?.Invoke(this, ex);
@@ -183,7 +184,7 @@
                     buffer.AsMemory(4, consumed).CopyTo(memory);
                     writer.Advance(consumed);
                     ArrayPool<byte>.Shared.Return(buffer);
-                    
+
                     if (!reader.TryRead(out buffer)) break;
                     count++;
                 } while (count < Options.FlushAtLeastEvery);
@@ -273,14 +274,16 @@
             {
                 // Empty output channel
                 while (_senderChannel.Reader.TryRead(out var dummy))
-                { }
+                {
+                }
 
                 _disconnectSource?.Cancel();
                 if (_readWriteAsyncTask != null)
                     await _readWriteAsyncTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
             finally
             {
                 _disconnectSource?.Dispose();
@@ -306,13 +309,15 @@
                 await _dispatchTask;
             }
             catch (OperationCanceledException)
-            { }
+            {
+            }
+
             _disposeTokenSource.Dispose();
         }
 
         public ValueTask PublishTextAsync(string subject, string text, string? replyTo = null)
         {
-            return PublishMemoryAsync(subject, Encoding.UTF8.GetBytes(text), replyTo); 
+            return PublishMemoryAsync(subject, Encoding.UTF8.GetBytes(text), replyTo);
         }
 
         public ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null)
@@ -356,15 +361,15 @@
 
         public async ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null)
         {
-            var subscriptionId = await SendSubscribe(subject, queueGroup); 
+            var subscriptionId = await SendSubscribe(subject, queueGroup);
             var channel = new NatsTextChannel(this, subject, queueGroup, subscriptionId);
             _channels[subscriptionId] = channel;
             return channel;
         }
 
-        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null) 
+        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null)
         {
-            var subscriptionId = await SendSubscribe(subject, queueGroup); 
+            var subscriptionId = await SendSubscribe(subject, queueGroup);
             var channel = new NatsTypedChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
             _channels[subscriptionId] = channel;
             return channel;
@@ -372,7 +377,7 @@
 
         public async ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null)
         {
-            var subscriptionId = await SendSubscribe(subject, queueGroup); 
+            var subscriptionId = await SendSubscribe(subject, queueGroup);
             var channel = new NatsObjectChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
             _channels[subscriptionId] = channel;
             return channel;
@@ -419,7 +424,7 @@
             var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
             await using var replySubscription = await SubscribeObject<TResponse>(replyTo, serializer: serializer);
             await PublishObjectAsync(subject, request, replyTo);
-            
+
             using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
             var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
             try

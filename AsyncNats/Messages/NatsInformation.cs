@@ -13,18 +13,25 @@
 
         [JsonPropertyName("server_id")]
         public string ServerId { get; set; } = string.Empty;
+
         [JsonPropertyName("version")]
         public string Version { get; set; } = string.Empty;
+
         [JsonPropertyName("proto")]
         public int Protocol { get; set; }
+
         [JsonPropertyName("go")]
         public string GoVersion { get; set; } = string.Empty;
+
         [JsonPropertyName("host")]
         public string Host { get; set; } = string.Empty;
+
         [JsonPropertyName("port")]
         public int Port { get; set; }
+
         [JsonPropertyName("max_payload")]
         public int MaxPayload { get; set; }
+
         [JsonPropertyName("client_id")]
         public int ClientId { get; set; }
 

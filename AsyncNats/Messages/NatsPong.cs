@@ -9,6 +9,7 @@
     public class NatsPong : INatsServerMessage, INatsClientMessage
     {
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("PONG\r\n"));
+
         public async ValueTask Serialize(PipeWriter writer)
         {
             await writer.WriteAsync(_command);

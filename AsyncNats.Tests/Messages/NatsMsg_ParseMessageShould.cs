@@ -17,7 +17,7 @@
             var message = new ReadOnlySpan<byte>(Encoding.UTF8.GetBytes("MSG FOO.BAR 9 11\r\n"));
             var msg = NatsMsg.ParseMessage(message, ref reader);
             Assert.IsType<NatsMsg>(msg);
-            ((NatsMsg)msg).Release();
+            ((NatsMsg) msg).Release();
         }
 
         [Fact]
@@ -34,7 +34,7 @@
         {
             var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("Hello World\r\n")));
             var message = new ReadOnlySpan<byte>(Encoding.UTF8.GetBytes("MSG FOO.BAR 9 11\r\n"));
-            var msg = (NatsMsg)NatsMsg.ParseMessage(message, ref reader);
+            var msg = (NatsMsg) NatsMsg.ParseMessage(message, ref reader);
             Assert.Equal("FOO.BAR", msg.Subject);
             Assert.Equal("9", msg.SubscriptionId);
             Assert.Equal(11, msg.Payload.Length);
@@ -47,7 +47,7 @@
         {
             var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("Hello World\r\n")));
             var message = new ReadOnlySpan<byte>(Encoding.UTF8.GetBytes("MSG FOO.BAR 9 INBOX.34 11\r\n"));
-            var msg = (NatsMsg)NatsMsg.ParseMessage(message, ref reader);
+            var msg = (NatsMsg) NatsMsg.ParseMessage(message, ref reader);
             Assert.Equal("FOO.BAR", msg.Subject);
             Assert.Equal("9", msg.SubscriptionId);
             Assert.Equal("INBOX.34", msg.ReplyTo);

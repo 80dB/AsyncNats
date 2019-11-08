@@ -25,7 +25,7 @@
         public void ReturnSameServerId()
         {
             var reader = new SequenceReader<byte>();
-            var info = (NatsInformation)NatsInformation.ParseMessage(_memory.Span, ref reader);
+            var info = (NatsInformation) NatsInformation.ParseMessage(_memory.Span, ref reader);
             Assert.Equal(_serverId, info.ServerId);
         }
     }

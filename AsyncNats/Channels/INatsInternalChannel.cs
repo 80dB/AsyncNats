@@ -1,7 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats.Channels
 {
     using System;
-    using System.Collections.Generic;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
 

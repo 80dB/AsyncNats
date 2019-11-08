@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Text;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
@@ -40,7 +39,7 @@
             return _parent.Unsubscribe(this as INatsInternalChannel);
         }
 
-        public async IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default(CancellationToken))
+        public async IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
             var reader = _channel.Reader;
             while (!cancellationToken.IsCancellationRequested)

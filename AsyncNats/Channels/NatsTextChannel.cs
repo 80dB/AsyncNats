@@ -37,7 +37,7 @@
             return _parent.Unsubscribe(this as INatsInternalChannel);
         }
 
-        public async IAsyncEnumerator<NatsTypedMsg<string>> GetAsyncEnumerator(CancellationToken cancellationToken = default(CancellationToken))
+        public async IAsyncEnumerator<NatsTypedMsg<string>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
             var reader = _channel.Reader;
             while (!cancellationToken.IsCancellationRequested)

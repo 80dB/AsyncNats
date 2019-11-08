@@ -8,20 +8,24 @@
 
     public class NatsConnect
     {
-        private static readonly  ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("CONNECT "));
-        private static readonly  ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
+        private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("CONNECT "));
+        private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
         [JsonPropertyName("verbose")]
         public bool Verbose { get; set; }
+
         [JsonPropertyName("pedantic")]
         public bool Pedantic { get; set; }
+
         [JsonPropertyName("tls_required")]
         public bool TlsRequired { get; set; }
 
         [JsonPropertyName("auth_token")]
         public string? AuthorizationToken { get; set; }
+
         [JsonPropertyName("user")]
         public string? Username { get; set; }
+
         [JsonPropertyName("pass")]
         public string? Password { get; set; }
 
@@ -60,9 +64,9 @@
 
         public static byte[] RentedSerialize(NatsConnect msg)
         {
-            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions { IgnoreNullValues = true });
+            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions {IgnoreNullValues = true});
             var buffer = ArrayPool<byte>.Shared.Rent(serialized.Length + _command.Length + _end.Length + 4);
-            
+
             var consumed = 4;
             _command.CopyTo(buffer.AsMemory(consumed));
             consumed += _command.Length;
@@ -73,7 +77,7 @@
             _end.CopyTo(buffer.AsMemory(consumed));
             consumed += _end.Length;
 
-            BitConverter.TryWriteBytes(buffer, consumed-4);
+            BitConverter.TryWriteBytes(buffer, consumed - 4);
             return buffer;
         }
     }

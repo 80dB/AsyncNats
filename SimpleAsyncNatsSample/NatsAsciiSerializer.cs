@@ -14,7 +14,7 @@
         public T Deserialize<T>(ReadOnlyMemory<byte> buffer)
         {
             if (typeof(T) != typeof(string)) throw new Exception("You are not supposed to throw anything other than strings at me");
-            return (T)(object)Encoding.ASCII.GetString(buffer.Span);
+            return (T) (object) Encoding.ASCII.GetString(buffer.Span);
         }
     }
 }

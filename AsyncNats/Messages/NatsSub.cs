@@ -44,11 +44,12 @@
                 _del.CopyTo(buffer.AsMemory(consumed));
                 consumed += _del.Length;
             }
+
             consumed += Encoding.UTF8.GetBytes(subscriptionId, buffer.AsSpan(consumed));
             _end.CopyTo(buffer.AsMemory(consumed));
             consumed += _end.Length;
 
-            BitConverter.TryWriteBytes(buffer, consumed-4);
+            BitConverter.TryWriteBytes(buffer, consumed - 4);
             return buffer;
         }
     }

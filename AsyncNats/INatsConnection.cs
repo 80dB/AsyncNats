@@ -13,7 +13,7 @@
 
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
-        
+
         ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null);
         ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null);
         ValueTask PublishTextAsync(string subject, string text, string? replyTo = null);

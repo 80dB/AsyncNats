@@ -46,7 +46,7 @@
             text = text.Replace("CONNECT ", "");
             text = text.Replace("\r\n", "");
 
-            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(_connect, new JsonSerializerOptions { IgnoreNullValues = true }), text);
+            Assert.Equal(JsonSerializer.Serialize(_connect, new JsonSerializerOptions {IgnoreNullValues = true}), text);
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
