@@ -57,6 +57,9 @@ The request methods require a process to listen to the subjects. The replyTo-sub
 
 ## Release history
 
+### v0.5.1
+* Added events and status to INatsConnection interface
+
 ### v0.5
 * Added (simple) Request-Reply pattern
 * Added Status property to get current connection status

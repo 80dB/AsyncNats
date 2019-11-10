@@ -10,6 +10,11 @@
     public interface INatsConnection : IAsyncDisposable
     {
         INatsOptions Options { get; }
+        NatsStatus Status { get; }
+
+        event EventHandler<Exception>? ConnectionException;
+        event EventHandler<NatsStatus>? StatusChange;
+        event EventHandler<NatsInformation>? ConnectionInformation;
 
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
