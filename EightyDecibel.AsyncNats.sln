@@ -15,7 +15,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{4860199C-B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RequestAsyncNatsSample", "RequestAsyncNatsSample\RequestAsyncNatsSample.csproj", "{2B1BEA1A-064F-41A2-BE04-43EF60D306B7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RequestAsyncNatsSample", "RequestAsyncNatsSample\RequestAsyncNatsSample.csproj", "{2B1BEA1A-064F-41A2-BE04-43EF60D306B7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LargeMessageAsyncNatsSample", "LargeMessageAsyncNatsSample\LargeMessageAsyncNatsSample.csproj", "{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +41,10 @@ Global
 		{2B1BEA1A-064F-41A2-BE04-43EF60D306B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2B1BEA1A-064F-41A2-BE04-43EF60D306B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2B1BEA1A-064F-41A2-BE04-43EF60D306B7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,6 +54,7 @@ Global
 		{819DB266-32D1-4D5A-904F-6A59DAC936AB} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
 		{38EFCB55-32DB-4155-A51B-12795D75B1DC} = {4860199C-B649-4D73-9AFE-0F8A8CC30ED1}
 		{2B1BEA1A-064F-41A2-BE04-43EF60D306B7} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
+		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E5462DB8-9C99-488A-9E2D-D7605CDB80CE}

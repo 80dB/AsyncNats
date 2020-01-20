@@ -145,6 +145,7 @@
                 var readBytes = await socket.ReceiveAsync(memory, SocketFlags.None, disconnectToken);
                 if (readBytes == 0) break;
                 writer.Advance(readBytes);
+                Console.WriteLine("readBytes = {0}", readBytes);
 
                 var flush = await writer.FlushAsync(disconnectToken);
                 if (flush.IsCompleted || flush.IsCanceled) break;
@@ -163,6 +164,7 @@
                 {
                     var messages = parser.ParseMessages(read.Buffer, out var consumed);
                     reader.AdvanceTo(read.Buffer.GetPosition(consumed));
+                    if (consumed == 0) break;
 
                     foreach (var message in messages)
                         await writer.WriteAsync(message, disconnectToken);

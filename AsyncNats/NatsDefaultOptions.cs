@@ -10,7 +10,7 @@
         public int SenderQueueLength { get; set; } = 5000;
         public PipeOptions SenderPipeOptions { get; set; } = new PipeOptions();
         public int ReceiverQueueLength { get; set; } = 5000;
-        public PipeOptions ReceiverPipeOptions { get; set; } = new PipeOptions();
+        public PipeOptions ReceiverPipeOptions { get; set; } = new PipeOptions(pauseWriterThreshold: 1024*1024);
         public int FlushAtLeastEvery { get; set; } = 500;
         public INatsSerializer Serializer { get; set; } = new NatsDefaultSerializer();
         public bool Verbose { get; set; }
