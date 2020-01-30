@@ -64,7 +64,7 @@
                                 Payload = payload,
                                 ReplyTo = msg.ReplyTo,
                                 SubscriptionId = msg.SubscriptionId,
-                                Subject = msg.SubscriptionId
+                                Subject = msg.Subject
                             };
                         }
                         finally
