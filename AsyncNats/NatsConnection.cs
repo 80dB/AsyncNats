@@ -14,6 +14,7 @@
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Channels;
     using EightyDecibel.AsyncNats.Messages;
+    using EightyDecibel.AsyncNats.Rpc;
 
     public class NatsConnection : INatsConnection
     {
@@ -145,7 +146,6 @@
                 var readBytes = await socket.ReceiveAsync(memory, SocketFlags.None, disconnectToken);
                 if (readBytes == 0) break;
                 writer.Advance(readBytes);
-                Console.WriteLine("readBytes = {0}", readBytes);
 
                 var flush = await writer.FlushAsync(disconnectToken);
                 if (flush.IsCompleted || flush.IsCanceled) break;
@@ -260,7 +260,7 @@
                     var subscriptionId = msg?.SubscriptionId;
                     foreach (var channel in _channels.Values)
                     {
-                        if (subscriptionId != null && subscriptionId != channel.SubscriptionId) continue;
+                        if (channel.SubscriptionId != null && subscriptionId != channel.SubscriptionId) continue;
                         await channel.Publish(message);
                     }
 
@@ -469,6 +469,29 @@
             }
 
             throw new TimeoutException();
+        }
+
+        public TContract GenerateContractClient<TContract>(string? baseSubject = null)
+        {
+            baseSubject ??= $"{typeof(TContract).Namespace}.{typeof(TContract).Name}";
+            return NatsClientGenerator<TContract>.GenerateClient(this, baseSubject);
+        }
+
+        public async Task StartContractServer<TContract>(TContract contract, CancellationToken cancellationToken, string? baseSubject = null, string? queueGroup = null, INatsSerializer? serializer = null)
+        {
+            baseSubject ??= $"{typeof(TContract).Namespace}.{typeof(TContract).Name}";
+            baseSubject += ".>";
+
+            var subscriptionId = await SendSubscribe(baseSubject, queueGroup);
+            var channel = NatsServerGenerator<TContract>.CreateServerProxy(this, baseSubject, queueGroup, subscriptionId, serializer ?? Options.Serializer, contract);
+            _channels[subscriptionId] = channel;
+            
+            try
+            {
+                await channel.Listener(cancellationToken);
+            }
+            catch(OperationCanceledException)
+            { }
         }
     }
 }

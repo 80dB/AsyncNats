@@ -6,9 +6,15 @@ The end result is very fast Nats.io client that, in our opinion, fits the C# 8.0
 ## Known issues
 There are currently no known issues. But the library has not been rigorously tested in production environments yet.
 
-## Shortcomings
+## Known limitations
 * No TLS support [and it will probably never be supported]
 * Proper documentation, working on it ;)
+* The RPC implementation does not support Cancellation tokes (but does obey the Request-timeout as specified by the INatsOptions)
+* The RPC implementation does not support overloads, it not work properly with multiple methods with the same name
+* The RPC implementation only supports methods
+* The RPC implementation is "single threaded" (Well single task)
+* The RPC implementation does not support generic methods
+* Remote exceptions do not include the remote stack trace and *might* fail if the Exception is not serializable by BinaryFormatter
 
 ## Usage
 You can publish messages using any of the following methods:
@@ -55,7 +61,24 @@ RequestObject // This method sends and receives a serialized/deserialized object
 
 The request methods require a process to listen to the subjects. The replyTo-subject is automatically generated using the Environment.TickCount when the connection options where created and an internal counter. In larger setups where multiple processes are starting at the same time this might not be unique enough. You can change this prefix by changing it in the options when creating a NatsConnection.
 
+## RPC Usage
+You can let AsyncNats handle RPC calls for you (instead of using Request + Subscribe) by using these two methods:
+```C#
+StartContractServer<TContract>
+GenerateContractClient<TContract>
+```
+
+The contract has to be an interface and only supports methods (both sync/async). The InterfaceAsyncNatsSample gives a good idea on how to  use them. 
+
+It's possible to have multiple contract servers running with a different base subject. This feature is still in experimental phase.
+
 ## Release history
+
+### v0.6
+* Added RPC functionality using interface contracts (see InterfaceAsyncNatsSample)
+
+### v0.5.2
+* Increased pauseWriterThreshold on receiver pipe to 1Mb to correctly handle large messages
 
 ### v0.5.1
 * Added events and status to INatsConnection interface
