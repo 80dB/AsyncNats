@@ -483,7 +483,7 @@
             baseSubject += ".>";
 
             var subscriptionId = await SendSubscribe(baseSubject, queueGroup);
-            var channel = NatsServerGenerator<TContract>.CreateServerProxy(this, baseSubject, queueGroup, subscriptionId, serializer ?? Options.Serializer, contract);
+            await using var channel = NatsServerGenerator<TContract>.CreateServerProxy(this, baseSubject, queueGroup, subscriptionId, serializer ?? Options.Serializer, contract);
             _channels[subscriptionId] = channel;
             
             try
