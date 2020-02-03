@@ -74,6 +74,9 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.6.1
+* Forgot to add StartContractServer to the interface
+
 ### v0.6
 * Added RPC functionality using interface contracts (see InterfaceAsyncNatsSample)
 
