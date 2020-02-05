@@ -5,6 +5,7 @@
     using System.Linq;
     using System.Reflection;
     using System.Reflection.Emit;
+    using System.Runtime.Serialization;
 
     internal class NatsClientRequest
     {
@@ -25,6 +26,7 @@
                 if (_requestTypes.TryGetValue(count, out var type)) return type;
 
                 var typeBuilder = NatsClientAssembly.DefineClassType("NatsClientRequest" + count);
+                typeBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(DataContractAttribute).GetConstructor(Type.EmptyTypes), Array.Empty<object>()));
                 var types = typeBuilder.DefineGenericParameters(Enumerable.Range(1, count).Select(x => $"TP{x}").ToArray());
                 var fields = BuildProperties(typeBuilder, types);
                 var defaultConstructor = typeBuilder.DefineDefaultConstructor(MethodAttributes.Public);
@@ -50,6 +52,7 @@
             for (var i = 0; i < types.Length; i++)
             {
                 var property = typeBuilder.DefineProperty($"P{i + 1}", PropertyAttributes.None, types[i], null);
+                property.SetCustomAttribute(new CustomAttributeBuilder(typeof(DataMemberAttribute).GetConstructor(Type.EmptyTypes), Array.Empty<object>(), new[] { typeof(DataMemberAttribute).GetProperty("Order") }, new object[] { i + 1 }));
                 fields[i] = typeBuilder.DefineField($"_p{i + 1}", types[i], FieldAttributes.Private);
 
                 var attr = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;

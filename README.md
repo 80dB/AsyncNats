@@ -74,6 +74,11 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.6.2
+* Updated InterfaceAsyncNatsSample to use a custom serializer (MessagePack)
+* Fixed an issue when MessagePack was used as serializer (and possible others)
+* Added DataContract / DataMember attributes to request/response classes used by the RPC functionality to aid MessagePack (and possible others)
+
 ### v0.6.1
 * Forgot to add StartContractServer to the interface
 * Dispose the contract server channel once done (due to cancellation or exception)

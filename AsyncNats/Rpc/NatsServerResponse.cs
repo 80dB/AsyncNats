@@ -1,16 +1,22 @@
 ﻿namespace EightyDecibel.AsyncNats.Rpc
 {
     using System;
+    using System.Runtime.Serialization;
 
-    internal class NatsServerResponse
+    [DataContract, Serializable]
+    public class NatsServerResponse
     {
+        [DataMember(Order = 1)]
         public byte[]? E { get; set; }
     }
 
-    internal class NatsServerResponse<TResult>
+    [DataContract, Serializable]
+    public class NatsServerResponse<TResult>
     {
+        [DataMember(Order = 1)]
         public byte[]? E { get; set; }
 #nullable disable
+        [DataMember(Order = 2)]
         public TResult R { get; set; } = default;
 #nullable restore
 

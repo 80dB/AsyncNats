@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MessagePack" Version="2.1.80" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AsyncNats\AsyncNats.csproj" />
   </ItemGroup>
 

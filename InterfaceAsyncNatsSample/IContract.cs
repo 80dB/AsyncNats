@@ -17,5 +17,7 @@
         void Say(string text);
 
         void ThrowException();
+
+        Task<int> ThrowExceptionOnMethodWithReturn();
     }
 }

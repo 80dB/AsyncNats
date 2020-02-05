@@ -43,5 +43,10 @@
         {
             throw new Exception("Server exception");
         }
+
+        public Task<int> ThrowExceptionOnMethodWithReturn()
+        {
+            throw new Exception("Server exception");
+        }
     }
 }

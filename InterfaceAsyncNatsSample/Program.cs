@@ -12,6 +12,7 @@
         {
             var options = new NatsDefaultOptions
             {
+                Serializer = new NatsMessagePackSerializer(),
                 Echo = true // Without echo this test does not work! On production you might want to keep it disabled
             };
 
@@ -45,6 +46,15 @@
                 client.ThrowException();
             }
             catch(Exception ex)
+            {
+                Console.WriteLine("Exception: {0}\n{1}", ex.Message, ex.StackTrace);
+            }
+
+            try
+            {
+                await client.ThrowExceptionOnMethodWithReturn();
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("Exception: {0}\n{1}", ex.Message, ex.StackTrace);
             }
