@@ -48,5 +48,11 @@
         {
             throw new Exception("Server exception");
         }
+
+        public async Task FireAndForget(int x, int y, int z)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Console.WriteLine("FireAndForget: {0},{1},{2}", x, y, z);
+        }
     }
 }

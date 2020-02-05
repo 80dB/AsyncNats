@@ -74,6 +74,10 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.6.3
+* Added fire and forget methods (add NatsFireAndForget attribute to the methods), the caller doesn't wait for an answer. Note, exceptions thrown inside fire and forget methods will be lost!
+* An exception will be thrown when ValueTask is used as a contract type
+
 ### v0.6.2
 * Updated InterfaceAsyncNatsSample to use a custom serializer (MessagePack)
 * Fixed an issue when MessagePack was used as serializer (and possible others)

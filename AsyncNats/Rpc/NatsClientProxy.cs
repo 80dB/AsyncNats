@@ -39,7 +39,18 @@
             var task = InvokeAsync<TParameters, object>(method, parameters);
             task.ConfigureAwait(false);
             task.Wait();
-            return;
+        }
+
+        protected Task PublishAsync<TParameters>(string method, TParameters parameters)
+        {
+            return _connection.PublishObjectAsync($"{_baseSubject}.{method}", parameters).AsTask();
+        }
+
+        protected void Publish<TParameters>(string method, TParameters parameters)
+        {
+            var task = PublishAsync(method, parameters);
+            task.ConfigureAwait(false);
+            task.Wait();
         }
     }
 }

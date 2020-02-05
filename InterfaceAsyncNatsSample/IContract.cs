@@ -1,5 +1,6 @@
 ﻿namespace InterfaceAsyncNatsSample
 {
+    using EightyDecibel.AsyncNats.Rpc;
     using System.Threading.Tasks;
 
     public interface IContract
@@ -19,5 +20,8 @@
         void ThrowException();
 
         Task<int> ThrowExceptionOnMethodWithReturn();
+
+        [NatsFireAndForget]
+        Task FireAndForget(int x, int y, int z);
     }
 }

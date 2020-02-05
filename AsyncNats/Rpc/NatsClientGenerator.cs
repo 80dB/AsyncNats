@@ -48,15 +48,34 @@
                     parameterTypes);
 
                 var responseType = contractMethod.ReturnType;
+                var hasResult = true;
                 var invokeMethod = "Invoke";
                 if (responseType == typeof(Task))
                 {
                     invokeMethod = "InvokeAsync";
                 }
+                else if (responseType == typeof(void))
+                {
+                    invokeMethod = "InvokeVoid";
+                    hasResult = false;
+                }
                 else if (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(Task<>))
                 {
                     responseType = responseType.GetGenericArguments()[0];
                     invokeMethod = "InvokeAsync";
+                } 
+                else if (responseType == typeof(ValueTask) || (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(ValueTask<>)))
+                {
+                    throw new Exception("ValueTask types are not supported");
+                }
+
+                if (contractMethod.GetCustomAttribute<NatsFireAndForgetAttribute>() != null)
+                {
+                    hasResult = false;
+
+                    if (responseType == typeof(Task)) invokeMethod = "PublishAsync";
+                    else if (responseType == typeof(void)) invokeMethod = "Publish";
+                    else throw new Exception("NatsFireAndForget is only allowed for void/Task methods");
                 }
 
                 var il = clientMethod.GetILGenerator();
@@ -79,9 +98,9 @@
                     il.Emit(OpCodes.Ldc_I4_0);
                 }
 
-                var requestMethod = responseType == typeof(void) ?
-                    typeof(NatsClientProxy).GetMethod("InvokeVoid", BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(requestType) :
-                    typeof(NatsClientProxy).GetMethod(invokeMethod, BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(requestType, responseType);
+                var requestMethod = hasResult ?
+                    typeof(NatsClientProxy).GetMethod(invokeMethod, BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(requestType, responseType) :
+                    typeof(NatsClientProxy).GetMethod(invokeMethod, BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(requestType);
                 il.Emit(OpCodes.Call, requestMethod);
                 il.Emit(OpCodes.Ret);
             }

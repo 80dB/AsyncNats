@@ -41,6 +41,9 @@
             await client.SayAsync("Hello Async World");
             client.Say("Hello Sync World");
 
+            await client.FireAndForget(1, 2, 3);
+            Console.WriteLine("After FireAndForget - Note that ThrowException will not excute until after FireAndForget finishes (server is single threaded)");
+
             try
             {
                 client.ThrowException();
