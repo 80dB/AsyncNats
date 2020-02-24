@@ -74,6 +74,10 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.6.4
+* Added optional TaskScheduler parameter to StartContractServer to make the "Server" run task concurrently
+* Added CancellationToken to all Async methods
+
 ### v0.6.3
 * Added fire and forget methods (add NatsFireAndForget attribute to the methods), the caller doesn't wait for an answer. Note, exceptions thrown inside fire and forget methods will be lost!
 * An exception will be thrown when ValueTask is used as a contract type

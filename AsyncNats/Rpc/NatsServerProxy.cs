@@ -24,13 +24,15 @@
 
         private Dictionary<string, (InvokeAsyncDelegate invoke, SerializeDelegate serialize)> _asyncMethods;
         private Dictionary<string, InvokeDelegate> _syncMethods;
+        private TaskScheduler? _taskScheduler;
 
-        internal NatsServerProxy(NatsConnection parent, string subject, string? queueGroup, string subscriptionId, INatsSerializer serializer, TContract contract, IReadOnlyDictionary<string, (MethodInfo invoke, MethodInfo serialize)> asyncMethods, IReadOnlyDictionary<string, MethodInfo> syncMethods)
+        internal NatsServerProxy(NatsConnection parent, string subject, string? queueGroup, string subscriptionId, INatsSerializer serializer, TContract contract, TaskScheduler? taskScheduler, IReadOnlyDictionary<string, (MethodInfo invoke, MethodInfo serialize)> asyncMethods, IReadOnlyDictionary<string, MethodInfo> syncMethods)
         {
             _parent = parent;
             _channel = Channel.CreateBounded<INatsServerMessage>(parent.Options.ReceiverQueueLength);
             _serializer = serializer;
             _contract = contract;
+            _taskScheduler = taskScheduler;
 
             Subject = subject;
             QueueGroup = queueGroup;
@@ -65,6 +67,7 @@
 
         public async Task Listener(CancellationToken cancellationToken = default)
         {
+            var taskFactory = _taskScheduler != null ? new TaskFactory(_taskScheduler) : null;
             var reader = _channel.Reader;
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -85,8 +88,20 @@
                     try
                     {
                         var method = msg.Subject.Substring((Subject ?? string.Empty).Length - 1);
-                        if (_asyncMethods.TryGetValue(method, out var delegates)) await InvokeAsync(delegates.invoke, delegates.serialize, msg);
-                        else if (_syncMethods.TryGetValue(method, out var invoke)) await InvokeSync(invoke, msg);
+                        if (_asyncMethods.TryGetValue(method, out var delegates))
+                        {
+                            if (taskFactory == null) await InvokeAsync(delegates.invoke, delegates.serialize, msg, cancellationToken);
+#pragma warning disable 4014
+                            else taskFactory.StartNew(() => InvokeAsync(delegates.invoke, delegates.serialize, msg, cancellationToken), cancellationToken);
+#pragma warning restore 4014
+                        }
+                        else if (_syncMethods.TryGetValue(method, out var invoke))
+                        {
+                            if (taskFactory == null) await InvokeSync(invoke, msg, cancellationToken);
+#pragma warning disable 4014
+                            else taskFactory.StartNew(() => InvokeSync(invoke, msg, cancellationToken), cancellationToken);
+#pragma warning restore 4014
+                        }
                         else throw new KeyNotFoundException("Unknown method");
                     }
                     catch (OperationCanceledException)
@@ -101,7 +116,7 @@
                             var formatter = new BinaryFormatter();
                             formatter.Serialize(ms, ex);
 
-                            await _parent.PublishObjectAsync(msg.ReplyTo, new NatsServerResponse { E = ms.ToArray() });
+                            await _parent.PublishObjectAsync(msg.ReplyTo, new NatsServerResponse { E = ms.ToArray() }, cancellationToken: cancellationToken);
                         }
                     }
                     finally
@@ -112,20 +127,20 @@
             }
         }
 
-        private async Task InvokeSync(InvokeDelegate invoke, NatsMsg msg)
+        private async Task InvokeSync(InvokeDelegate invoke, NatsMsg msg, CancellationToken cancellationToken)
         {
             var response = invoke(msg.Payload);
             if (!string.IsNullOrEmpty(msg.ReplyTo))
-                await _parent.PublishAsync(msg.ReplyTo, response);
+                await _parent.PublishAsync(msg.ReplyTo, response, cancellationToken: cancellationToken);
         }
 
-        private async Task InvokeAsync(InvokeAsyncDelegate invoke, SerializeDelegate serialize, NatsMsg msg)
+        private async Task InvokeAsync(InvokeAsyncDelegate invoke, SerializeDelegate serialize, NatsMsg msg, CancellationToken cancellationToken)
         {
             var task = invoke(msg.Payload);
             await task;
             var response = serialize(task);
             if (!string.IsNullOrEmpty(msg.ReplyTo))
-                await _parent.PublishAsync(msg.ReplyTo, response);
+                await _parent.PublishAsync(msg.ReplyTo, response, cancellationToken: cancellationToken);
         }
     }
 }

@@ -19,16 +19,16 @@
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
 
-        ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null);
-        ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null);
-        ValueTask PublishTextAsync(string subject, string text, string? replyTo = null);
-        ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null);
+        ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null, CancellationToken cancellationToken = default);
+        ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default);
+        ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default);
 
         IAsyncEnumerable<INatsServerMessage> SubscribeAll();
-        ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null);
-        ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null);
-        ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null);
-        ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null);
+        ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default);
+        ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
+        ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
+        ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null, CancellationToken cancellationToken = default);
         ValueTask Unsubscribe<T>(INatsObjectChannel<T> channel);
         ValueTask Unsubscribe<T>(INatsChannel<T> channel);
         ValueTask Unsubscribe(INatsChannel channel);
@@ -39,6 +39,6 @@
         Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
 
         TContract GenerateContractClient<TContract>(string? baseSubject = null);
-        Task StartContractServer<TContract>(TContract contract, CancellationToken cancellationToken, string? baseSubject = null, string? queueGroup = null, INatsSerializer? serializer = null);
+        Task StartContractServer<TContract>(TContract contract, CancellationToken cancellationToken, string? baseSubject = null, string? queueGroup = null, INatsSerializer? serializer = null, TaskScheduler? taskScheduler = null);
     }
 }

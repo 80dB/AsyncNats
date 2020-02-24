@@ -48,9 +48,9 @@
             SyncMethods = syncMethods;
         }
 
-        public static NatsServerProxy<TContract> CreateServerProxy(NatsConnection parent, string subject, string? queueGroup, string subscriptionId, INatsSerializer serializer, TContract contract)
+        public static NatsServerProxy<TContract> CreateServerProxy(NatsConnection parent, string subject, string? queueGroup, string subscriptionId, INatsSerializer serializer, TContract contract, TaskScheduler? taskScheduler)
         {
-            var result = Activator.CreateInstance(_type, parent, subject, queueGroup, subscriptionId, serializer, contract, AsyncMethods, SyncMethods);
+            var result = Activator.CreateInstance(_type, parent, subject, queueGroup, subscriptionId, serializer, contract, taskScheduler, AsyncMethods, SyncMethods);
             return (NatsServerProxy<TContract>) result;
         }
 
