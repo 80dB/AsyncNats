@@ -74,6 +74,9 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.6.5
+* Fixed an issue where the send/receive loop task would get executed synchroniously instead of asynchroniously
+
 ### v0.6.4
 * Added optional TaskScheduler parameter to StartContractServer to make the "Server" run task concurrently
 * Added CancellationToken to all Async methods
