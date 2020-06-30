@@ -59,7 +59,7 @@
             _receiverChannel = Channel.CreateBounded<INatsServerMessage>(Options.ReceiverQueueLength);
             _channels = new ConcurrentDictionary<string, INatsInternalChannel>();
             _disposeTokenSource = new CancellationTokenSource();
-            _dispatchTask = Dispatcher(_disposeTokenSource.Token);
+            _dispatchTask = Task.Run(() => Dispatcher(_disposeTokenSource.Token), _disposeTokenSource.Token);
         }
 
         public ValueTask ConnectAsync()
@@ -68,7 +68,7 @@
             if (_disconnectSource != null) throw new InvalidAsynchronousStateException("Already connected");
 
             _disconnectSource = new CancellationTokenSource();
-            _readWriteAsyncTask = Task.Run(() => ReadWriteAsync(_disposeTokenSource.Token), _disposeTokenSource.Token);
+            _readWriteAsyncTask = Task.Run(() => ReadWriteAsync(_disconnectSource.Token), _disconnectSource.Token);
             return new ValueTask();
         }
 
