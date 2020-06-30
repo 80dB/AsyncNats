@@ -24,7 +24,7 @@
             _type = typeBuilder.CreateType();
         }
 
-        static private void CreateConstructor(TypeBuilder typeBuilder)
+        private static void CreateConstructor(TypeBuilder typeBuilder)
         {
             var constructor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, new[] { typeof(INatsConnection), typeof(string) });
             var il = constructor.GetILGenerator();
@@ -36,7 +36,7 @@
             il.Emit(OpCodes.Ret);
         }
 
-        static private void CreateMethods(TypeBuilder typeBuilder)
+        private static void CreateMethods(TypeBuilder typeBuilder)
         {
             foreach (var contractMethod in typeof(TContract).GetMethods(BindingFlags.Public | BindingFlags.Instance))
             {

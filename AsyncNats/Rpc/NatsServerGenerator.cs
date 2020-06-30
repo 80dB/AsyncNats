@@ -54,7 +54,7 @@
             return (NatsServerProxy<TContract>) result;
         }
 
-        static private void CreateConstructor(TypeBuilder typeBuilder)
+        private static void CreateConstructor(TypeBuilder typeBuilder)
         {
             var baseConstructor = typeof(NatsServerProxy<TContract>).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)[0];
             var parameters = baseConstructor.GetParameters().Select(p => p.ParameterType).ToArray();
@@ -68,7 +68,7 @@
             il.Emit(OpCodes.Ret);
         }
 
-        static private (Dictionary<string, (MethodInfo invoke, MethodInfo serialize)>, Dictionary<string, MethodInfo>) CreateMethods(TypeBuilder typeBuilder)
+        private static (Dictionary<string, (MethodInfo invoke, MethodInfo serialize)>, Dictionary<string, MethodInfo>) CreateMethods(TypeBuilder typeBuilder)
         {
             var asyncMethods = new Dictionary<string, (MethodInfo, MethodInfo)>();
             var syncMethods = new Dictionary<string, MethodInfo>();
@@ -89,7 +89,7 @@
             return (asyncMethods, syncMethods);
         }
     
-        static private MethodBuilder CreateSyncMethod(TypeBuilder typeBuilder, MethodInfo contractMethod)
+        private static MethodBuilder CreateSyncMethod(TypeBuilder typeBuilder, MethodInfo contractMethod)
         {
             var serverMethod = typeBuilder.DefineMethod(
                 $"{contractMethod.Name}",
@@ -103,7 +103,7 @@
             return serverMethod;
         }
 
-        static private MethodBuilder CreateAsyncMethod(TypeBuilder typeBuilder, MethodInfo contractMethod)
+        private static MethodBuilder CreateAsyncMethod(TypeBuilder typeBuilder, MethodInfo contractMethod)
         {
             var serverMethod = typeBuilder.DefineMethod(
                 $"{contractMethod.Name}",
@@ -117,7 +117,7 @@
             return serverMethod;
         }
 
-        static private MethodBuilder CreateSerializeDelegate(TypeBuilder typeBuilder, MethodInfo contractMethod)
+        private static MethodBuilder CreateSerializeDelegate(TypeBuilder typeBuilder, MethodInfo contractMethod)
         {
             var serverMethod = typeBuilder.DefineMethod(
                 $"Serialize{contractMethod.Name}",
@@ -134,12 +134,12 @@
                 il.Emit(OpCodes.Callvirt, contractMethod.ReturnType.GetProperty("Result").GetGetMethod());
 
                 type = contractMethod.ReturnType.GetGenericArguments()[0];
-             }
+            }
             WriteSerialize(il, type);
             return serverMethod;
         }
 
-        static private void WriteDeserializeAndCall(MethodInfo contractMethod, ILGenerator il)
+        private static void WriteDeserializeAndCall(MethodInfo contractMethod, ILGenerator il)
         {
             var requestType = GetRequestType(contractMethod);
             if (requestType != typeof(void))
@@ -166,7 +166,7 @@
             il.Emit(OpCodes.Callvirt, contractMethod);
         }
 
-        static private void WriteSerialize(ILGenerator il, Type returnType)
+        private static void WriteSerialize(ILGenerator il, Type returnType)
         {
             var isVoid = returnType == typeof(void);
             var responseType = isVoid ? typeof(NatsServerResponse) : typeof(NatsServerResponse<>).MakeGenericType(returnType);
@@ -181,7 +181,7 @@
             il.Emit(OpCodes.Ret);
         }
 
-        static private Type GetRequestType(MethodInfo contractMethod)
+        private static Type GetRequestType(MethodInfo contractMethod)
         {
             var parameters = contractMethod.GetParameters();
             if (parameters.Length == 0) return typeof(void);

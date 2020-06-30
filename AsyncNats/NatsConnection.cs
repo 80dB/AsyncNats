@@ -68,7 +68,7 @@
             if (_disconnectSource != null) throw new InvalidAsynchronousStateException("Already connected");
 
             _disconnectSource = new CancellationTokenSource();
-            _readWriteAsyncTask = ReadWriteAsync(_disconnectSource.Token);
+            _readWriteAsyncTask = Task.Run(() => ReadWriteAsync(_disposeTokenSource.Token), _disposeTokenSource.Token);
             return new ValueTask();
         }
 
@@ -96,12 +96,12 @@
                 }
 
                 var readPipe = new Pipe(Options.ReceiverPipeOptions);
-                var readTask = ReadSocketAsync(socket, readPipe.Writer, internalDisconnect.Token);
-                var processTask = ProcessMessagesAsync(readPipe.Reader, internalDisconnect.Token);
+                var readTask = Task.Run(() => ReadSocketAsync(socket, readPipe.Writer, internalDisconnect.Token), internalDisconnect.Token);
+                var processTask = Task.Run(() => ProcessMessagesAsync(readPipe.Reader, internalDisconnect.Token), internalDisconnect.Token);
 
                 var writePipe = new Pipe(Options.SenderPipeOptions);
-                var serializeTask = FillSenderPipeAsync(writePipe.Writer, internalDisconnect.Token);
-                var writeTask = WriteSocketAsync(socket, writePipe.Reader, internalDisconnect.Token);
+                var serializeTask = Task.Run(() => FillSenderPipeAsync(writePipe.Writer, internalDisconnect.Token), internalDisconnect.Token);
+                var writeTask = Task.Run(() => WriteSocketAsync(socket, writePipe.Reader, internalDisconnect.Token), internalDisconnect.Token);
                 try
                 {
                     Status = NatsStatus.Connected;
