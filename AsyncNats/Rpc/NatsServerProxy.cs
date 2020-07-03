@@ -59,10 +59,10 @@
             return _parent.Unsubscribe(this as INatsInternalChannel);
         }
 
-        public ValueTask Publish(INatsServerMessage message)
+        public ValueTask Publish(INatsServerMessage message, CancellationToken cancellationToken)
         {
             if (message is NatsMsg msg) msg.Rent();
-            return _channel.Writer.WriteAsync(message);
+            return _channel.Writer.WriteAsync(message, cancellationToken);
         }
 
         public async Task Listener(CancellationToken cancellationToken = default)
