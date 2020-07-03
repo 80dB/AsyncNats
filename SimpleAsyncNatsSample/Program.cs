@@ -25,9 +25,24 @@
 
             var cancellation = new CancellationTokenSource();
 
-            var readerTypedTask = ReaderTyped(connection, cancellation.Token);
-            var writerTask = Writer(connection, cancellation.Token);
             await connection.ConnectAsync();
+
+            var count = 0;
+            while (connection.Status != NatsStatus.Connected)
+            {
+                await Task.Delay(50, cancellation.Token);
+                count++;
+                if (count > 100)
+                {
+                    Console.WriteLine("Could not connect to nats server");
+                    await connection.DisposeAsync();
+                    return;
+                }
+            }
+
+
+            var readerTypedTask = Task.Run(() => ReaderTyped(connection, cancellation.Token));
+            var writerTask = Task.Run(() => Writer(connection, cancellation.Token));
 
             Console.ReadKey();
 
