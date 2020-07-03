@@ -28,10 +28,10 @@
             SubscriptionId = subscriptionId;
         }
 
-        public ValueTask Publish(INatsServerMessage message)
+        public ValueTask Publish(INatsServerMessage message, CancellationToken cancellationToken)
         {
             if (message is NatsMsg msg) msg.Rent();
-            return _channel.Writer.WriteAsync(message);
+            return _channel.Writer.WriteAsync(message, cancellationToken);
         }
 
         public ValueTask DisposeAsync()

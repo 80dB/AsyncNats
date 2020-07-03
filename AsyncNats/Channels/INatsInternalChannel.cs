@@ -1,6 +1,7 @@
 ﻿namespace EightyDecibel.AsyncNats.Channels
 {
     using System;
+    using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
 
@@ -10,6 +11,6 @@
         string? QueueGroup { get; }
         string SubscriptionId { get; }
 
-        ValueTask Publish(INatsServerMessage message);
+        ValueTask Publish(INatsServerMessage message, CancellationToken cancellationToken);
     }
 }
