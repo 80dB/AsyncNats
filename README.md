@@ -74,6 +74,11 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.7.0
+* Reduced amount of queue's inside the connection
+* Made amount of queue'd bytes visible in SenderQueueSize and ReceiverQueueSize properties
+* Added CancellationToken to internal publish methods
+
 ### v0.6.5
 * Fixed an issue where the send/receive loop task would get executed synchroniously instead of asynchroniously
 
