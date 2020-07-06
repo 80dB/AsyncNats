@@ -10,6 +10,7 @@
     using System.Net.Sockets;
     using System.Text;
     using System.Threading;
+    using System.Threading.Channels;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Channels;
     using EightyDecibel.AsyncNats.Messages;
@@ -24,7 +25,7 @@
 
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
-        private Pipe _senderPipe;
+        private Channel<byte[]> _senderChannel;
         private ConcurrentDictionary<string, INatsInternalChannel> _channels;
 
         private NatsStatus _status;
@@ -58,7 +59,7 @@
         {
             Options = options;
 
-            _senderPipe = new Pipe(Options.SenderPipeOptions);
+            _senderChannel = Channel.CreateBounded<byte[]>(options.SenderQueueLength);
             _channels = new ConcurrentDictionary<string, INatsInternalChannel>();
             _disposeTokenSource = new CancellationTokenSource();
         }
@@ -70,7 +71,6 @@
 
             _disconnectSource = new CancellationTokenSource();
 
-            _senderPipe = new Pipe(Options.SenderPipeOptions);
             _senderQueueSize = 0;
             _readWriteAsyncTask = Task.Run(() => ReadWriteAsync(_disconnectSource.Token), _disconnectSource.Token);
             return new ValueTask();
@@ -202,23 +202,41 @@
 
         private async Task WriteSocketAsync(Socket socket, CancellationToken disconnectToken)
         {
-            var reader = _senderPipe.Reader;
+            var reader = _senderChannel.Reader;
+            var buffer = new byte[1024 * 1024];
+            var bufferLength = buffer.Length;
 
             await SendConnect(socket, disconnectToken);
             await Resubscribe(socket, disconnectToken);
             while (!disconnectToken.IsCancellationRequested)
             {
+                var position = 0;
                 var result = await reader.ReadAsync(disconnectToken);
                 do
                 {
-                    foreach (var segment in result.Buffer)
+                    var consumed = BitConverter.ToInt32(result);
+                    Interlocked.Add(ref _senderQueueSize, -consumed);
+
+                    if (position + consumed > bufferLength && position > 0)
                     {
-                        await socket.SendAsync(segment, SocketFlags.None, disconnectToken);
-                        Interlocked.Add(ref _senderQueueSize, -segment.Length);
+                        await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
+                        position = 0;
                     }
 
-                    reader.AdvanceTo(result.Buffer.End);
+                    if (consumed > bufferLength)
+                    {
+                        await socket.SendAsync(result.AsMemory(4, consumed), SocketFlags.None, disconnectToken);
+                    }
+                    else
+                    {
+                        result.AsMemory(4, consumed).CopyTo(buffer.AsMemory(position));
+                        position += consumed;
+                    }
                 } while (reader.TryRead(out result));
+
+                if (position == 0) continue;
+
+                await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
             }
         }
 
@@ -245,18 +263,13 @@
             }
         }
 
-        private ValueTask<FlushResult> WriteAsync(byte[] buffer, CancellationToken cancellationToken)
+        private ValueTask WriteAsync(byte[] buffer, CancellationToken cancellationToken)
         {
-            try
-            {
-                var consumed = BitConverter.ToInt32(buffer);
-                Interlocked.Add(ref _senderQueueSize, consumed);
-                return _senderPipe.Writer.WriteAsync(buffer.AsMemory(4, consumed), cancellationToken);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
+            var consumed = BitConverter.ToInt32(buffer);
+            Interlocked.Add(ref _senderQueueSize, consumed);
+
+            if (_senderChannel.Writer.TryWrite(buffer)) return new ValueTask();
+            return _senderChannel.Writer.WriteAsync(buffer, cancellationToken);
         }
 
         public async ValueTask DisconnectAsync()

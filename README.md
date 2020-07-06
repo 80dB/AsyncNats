@@ -75,6 +75,9 @@ It's possible to have multiple contract servers running with a different base su
 ## Release history
 
 ### v0.7.0
+* Pipe did not support multiple simultaneous WriteAsync's, rewrote to use Channel instead with an internal 1Mb socket buffer (it's actually faster)
+
+### v0.7.0
 * Reduced amount of queue's inside the connection
 * Made amount of queue'd bytes visible in SenderQueueSize and ReceiverQueueSize properties
 * Added CancellationToken to internal publish methods
