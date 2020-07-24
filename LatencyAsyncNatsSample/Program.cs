@@ -99,9 +99,9 @@
 
         static async Task Reader(NatsConnection connection, CancellationToken cancellationToken)
         {
-            await foreach (var msg in (await connection.Subscribe("latency-test", cancellationToken: cancellationToken)).WithCancellation(cancellationToken))
+            await foreach (var msg in connection.Subscribe("latency-test", cancellationToken: cancellationToken))
             {
-                var timestamp = BitConverter.ToInt64(((NatsMsg) msg).Payload.Span);
+                var timestamp = BitConverter.ToInt64(msg.Payload.Span);
                 _timings.Add(Stopwatch.GetTimestamp() - timestamp);
             }
         }

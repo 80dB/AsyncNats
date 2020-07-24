@@ -8,11 +8,11 @@
     using System.IO.Pipelines;
     using System.Linq;
     using System.Net.Sockets;
+    using System.Runtime.CompilerServices;
     using System.Text;
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
-    using EightyDecibel.AsyncNats.Channels;
     using EightyDecibel.AsyncNats.Messages;
     using EightyDecibel.AsyncNats.Rpc;
 
@@ -26,7 +26,37 @@
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
         private Channel<byte[]> _senderChannel;
-        private ConcurrentDictionary<string, INatsInternalChannel> _channels;
+        
+        // Assignment of references are atomic
+        // https://stackoverflow.com/questions/2192124/reference-assignment-is-atomic-so-why-is-interlocked-exchangeref-object-object
+        private Subscription[] _subscriptions;
+        private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
+
+        private class Subscription
+        {
+            // Not sure if we need to keep a reference to Channel or not
+            // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
+            private readonly Channel<NatsMsg> _channel;
+
+            public Subscription(string subject, string? queueGroup, long subscriptionId, int queueLength)
+            {
+                Subject = subject;
+                QueueGroup = queueGroup;
+                SubscriptionId = subscriptionId.ToString();
+
+                _channel = Channel.CreateBounded<NatsMsg>(queueLength);
+
+                Writer = _channel.Writer;
+                Reader = _channel.Reader;
+            }
+
+            public string Subject { get; }
+            public string? QueueGroup { get; }
+            public string SubscriptionId { get; }
+            
+            public ChannelWriter<NatsMsg> Writer { get; }
+            public ChannelReader<NatsMsg> Reader { get; }
+        }
 
         private NatsStatus _status;
         private CancellationTokenSource _disposeTokenSource;
@@ -60,7 +90,10 @@
             Options = options;
 
             _senderChannel = Channel.CreateBounded<byte[]>(options.SenderQueueLength);
-            _channels = new ConcurrentDictionary<string, INatsInternalChannel>();
+            
+            _subscriptions = Array.Empty<Subscription>();
+            _subscriptionsLock = new SemaphoreSlim(1, 1);
+
             _disposeTokenSource = new CancellationTokenSource();
         }
 
@@ -176,25 +209,27 @@
 
                     foreach (var message in messages)
                     {
-                        if (message is NatsPing)
+                        switch (message)
                         {
-                            await WriteAsync(NatsPong.RentedSerialize(), disconnectToken);
-                        }
+                            case NatsPing _:
+                                await WriteAsync(NatsPong.RentedSerialize(), disconnectToken);
+                                break;
 
-                        if (message is NatsInformation info)
-                        {
-                            ConnectionInformation?.Invoke(this, info);
-                        }
+                            case NatsInformation info:
+                                ConnectionInformation?.Invoke(this, info);
+                                break;
 
-                        var msg = message as NatsMsg;
-                        var subscriptionId = msg?.SubscriptionId;
-                        foreach (var channel in _channels.Values)
-                        {
-                            if (channel.SubscriptionId != null && subscriptionId != channel.SubscriptionId) continue;
-                            await channel.Publish(message, disconnectToken);
+                            case NatsMsg msg:
+                                var subscriptions = _subscriptions;
+                                foreach (var subscription in subscriptions)
+                                {
+                                    if (subscription.SubscriptionId != msg.SubscriptionId) continue;
+                                    if (subscription.Writer.TryWrite(msg)) continue;
+                                    await subscription.Writer.WriteAsync(msg, disconnectToken);
+                                }
+                                msg.Release();
+                                break;
                         }
-
-                        msg?.Release();
                     }
                 } while (reader.TryRead(out read));
             }
@@ -244,22 +279,39 @@
         {
             var connect = new NatsConnect(Options);
             var buffer = NatsConnect.RentedSerialize(connect);
-            var consumed = BitConverter.ToInt32(buffer);
-            await socket.SendAsync(buffer.AsMemory(4, consumed), SocketFlags.None, disconnectToken);
-            ArrayPool<byte>.Shared.Return(buffer);
+            try
+            {
+                var consumed = BitConverter.ToInt32(buffer);
+                await socket.SendAsync(buffer.AsMemory(4, consumed), SocketFlags.None, disconnectToken);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         private async Task Resubscribe(Socket socket, CancellationToken disconnectToken)
         {
-            foreach (var channel in _channels.Values)
+            await _subscriptionsLock.WaitAsync(disconnectToken);
+            try
             {
-                if (string.IsNullOrEmpty(channel.Subject))
-                    continue;
-
-                var buffer = NatsSub.RentedSerialize(channel.Subject, channel.QueueGroup, channel.SubscriptionId);
-                var consumed = BitConverter.ToInt32(buffer);
-                await socket.SendAsync(buffer.AsMemory(4, consumed), SocketFlags.None, disconnectToken);
-                ArrayPool<byte>.Shared.Return(buffer);
+                foreach (var subscription in _subscriptions)
+                {
+                    var buffer = NatsSub.RentedSerialize(subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+                    try
+                    {
+                        var consumed = BitConverter.ToInt32(buffer);
+                        await socket.SendAsync(buffer.AsMemory(4, consumed), SocketFlags.None, disconnectToken);
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer);
+                    }
+                }
+            }
+            finally
+            {
+                _subscriptionsLock.Release();
             }
         }
 
@@ -298,8 +350,7 @@
         {
             if (_disposeTokenSource.IsCancellationRequested) return;
 
-            foreach (var channel in _channels.Values.ToArray())
-                await channel.DisposeAsync();
+            _subscriptions = Array.Empty<Subscription>();
 
             await DisconnectAsync();
 
@@ -328,137 +379,185 @@
             await WriteAsync(pub, cancellationToken);
         }
 
-        public IAsyncEnumerable<INatsServerMessage> SubscribeAll()
+        private ValueTask SendSubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
-            var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
-            var channel = new NatsUntypedChannel(this, null, null, subscriptionId);
-            _channels[subscriptionId] = channel;
-            return channel;
+            return WriteAsync(NatsSub.RentedSerialize(subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId), cancellationToken);
         }
 
-        private async ValueTask<string> SendSubscribe(string subject, string? queueGroup, CancellationToken cancellationToken = default)
+        private ValueTask SendUnsubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
-            var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId).ToString();
-            await WriteAsync(NatsSub.RentedSerialize(subject, queueGroup, subscriptionId), cancellationToken);
-            return subscriptionId;
+            return WriteAsync(NatsUnsub.RentedSerialize(subscription.SubscriptionId, null), CancellationToken.None);
         }
 
-        public async ValueTask<INatsChannel> Subscribe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsMsg> Subscribe(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var subscriptionId = await SendSubscribe(subject, queueGroup, cancellationToken);
-            var channel = new NatsUntypedChannel(this, subject, queueGroup, subscriptionId);
-            _channels[subscriptionId] = channel;
-            return channel;
-        }
-
-        public async ValueTask<INatsChannel<string>> SubscribeText(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
-        {
-            var subscriptionId = await SendSubscribe(subject, queueGroup, cancellationToken);
-            var channel = new NatsTextChannel(this, subject, queueGroup, subscriptionId);
-            _channels[subscriptionId] = channel;
-            return channel;
-        }
-
-        public async ValueTask<INatsChannel<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default)
-        {
-            var subscriptionId = await SendSubscribe(subject, queueGroup, cancellationToken);
-            var channel = new NatsTypedChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
-            _channels[subscriptionId] = channel;
-            return channel;
-        }
-
-        public async ValueTask<INatsObjectChannel<T>> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default)
-        {
-            var subscriptionId = await SendSubscribe(subject, queueGroup, cancellationToken);
-            var channel = new NatsObjectChannel<T>(this, subject, queueGroup, subscriptionId, serializer ?? Options.Serializer);
-            _channels[subscriptionId] = channel;
-            return channel;
-        }
-
-        public ValueTask Unsubscribe<T>(INatsObjectChannel<T> channel) => Unsubscribe(channel as INatsInternalChannel);
-
-        public ValueTask Unsubscribe<T>(INatsChannel<T> channel) => Unsubscribe(channel as INatsInternalChannel);
-
-        public ValueTask Unsubscribe(INatsChannel channel) => Unsubscribe(channel as INatsInternalChannel);
-
-        internal async ValueTask Unsubscribe(INatsInternalChannel? channel)
-        {
-            if (channel == null) return;
-            if (!_channels.TryRemove(channel.SubscriptionId, out var dummy)) return;
-            if (string.IsNullOrEmpty(channel.Subject)) return;
-
-            await WriteAsync(NatsUnsub.RentedSerialize(channel.SubscriptionId, null), CancellationToken.None);
-        }
-
-        public async Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            return (await RequestMemory(subject, request, timeout, cancellationToken)).ToArray();
-        }
-
-        public async Task<ReadOnlyMemory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
-            await using var replySubscription = await Subscribe(replyTo, cancellationToken: cancellationToken);
-            await PublishMemoryAsync(subject, request, replyTo, cancellationToken);
-
-            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
-            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            var subscription = new Subscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
+            
+            await _subscriptionsLock.WaitAsync(cancellationToken);
             try
             {
-                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
+                _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
+            }
+            finally
+            {
+                _subscriptionsLock.Release();
+            }
+
+            await SendSubscribe(subscription, cancellationToken);
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (!(response is NatsMsg msg)) continue;
-                    return msg.Payload;
+                    var message = await subscription.Reader.ReadAsync(cancellationToken);
+                    do
+                    {
+                        try
+                        {
+                            yield return message;
+                        }
+                        finally
+                        {
+                            message.Release();
+                        }
+                    } while (!cancellationToken.IsCancellationRequested && subscription.Reader.TryRead(out message));
                 }
             }
             finally
             {
-                linkedSource?.Dispose();
+                // No cancellation token for the unsubscribe
+                await _subscriptionsLock.WaitAsync(CancellationToken.None);
+                try
+                {
+                    await SendUnsubscribe(subscription, CancellationToken.None);
+                    _subscriptions = _subscriptions.Where(s =>s != subscription).ToArray();
+                }
+                finally
+                {
+                    _subscriptionsLock.Release();
+                }
             }
-
-            throw new TimeoutException();
         }
 
-        public async Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<string> SubscribeText(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
-            await using var replySubscription = await SubscribeText(replyTo, cancellationToken: cancellationToken);
-            await PublishTextAsync(subject, request, replyTo, cancellationToken);
+            await foreach (var msg in Subscribe(subject, queueGroup, cancellationToken))
+            {
+                yield return Encoding.UTF8.GetString(msg.Payload.Span);
+            }
+        }
 
+        public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var msg in Subscribe(subject, queueGroup, cancellationToken))
+            {
+                T payload;
+                try
+                {
+                    payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload);
+                }
+                catch (Exception e)
+                {
+                    ConnectionException?.Invoke(this, new NatsDeserializeException(msg, e));
+                    throw;
+                }
+
+                yield return new NatsTypedMsg<T>
+                {
+                    Subject = msg.Subject,
+                    ReplyTo = msg.ReplyTo,
+                    SubscriptionId = msg.SubscriptionId,
+                    Payload = payload
+                };
+            }
+        }
+
+        public async IAsyncEnumerable<T> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var msg in Subscribe(subject, queueGroup, cancellationToken))
+            {
+                T payload;
+                try
+                {
+                    payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload);
+                }
+                catch (Exception e)
+                {
+                    ConnectionException?.Invoke(this, new NatsDeserializeException(msg, e));
+                    throw;
+                }
+
+                yield return payload;
+            }
+        }
+
+        private async ValueTask<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            // Combine cancellation token with timeout
             using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
-            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
+            
+            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
+            var subscription = new Subscription(replyTo, null, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
+
+            await _subscriptionsLock.WaitAsync(cancellationToken);
             try
             {
-                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
-                    return response.Payload;
+                _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
             }
             finally
             {
-                linkedSource?.Dispose();
+                _subscriptionsLock.Release();
             }
 
-            throw new TimeoutException();
-        }
-
-        public async Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
-            await using var replySubscription = await SubscribeObject<TResponse>(replyTo, serializer: serializer, cancellationToken: cancellationToken);
-            await PublishObjectAsync(subject, request, replyTo, cancellationToken);
-
-            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
-            var linkedSource = cancellationToken != default ? CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken) : null;
+            await SendSubscribe(subscription, cancellationToken);
+            await PublishMemoryAsync(subject, request, replyTo, cancellationToken);
             try
             {
-                await foreach (var response in replySubscription.WithCancellation((linkedSource ?? timeoutSource).Token))
-                    return response;
+                var message = await subscription.Reader.ReadAsync(cancellationToken);
+                try
+                {
+                    return deserialize(message);
+                }
+                catch (Exception e)
+                {
+                    ConnectionException?.Invoke(this, new NatsDeserializeException(message, e));
+                    throw;
+                }
             }
             finally
             {
-                linkedSource?.Dispose();
+                // No cancellation token for the unsubscribe
+                await _subscriptionsLock.WaitAsync(CancellationToken.None);
+                try
+                {
+                    await SendUnsubscribe(subscription, CancellationToken.None);
+                    _subscriptions = _subscriptions.Where(s =>s != subscription).ToArray();
+                }
+                finally
+                {
+                    _subscriptionsLock.Release();
+                }
             }
+        }
 
-            throw new TimeoutException();
+        public ValueTask<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            return InternalRequest(subject, request.AsMemory(), msg => msg.Payload.ToArray(), timeout, cancellationToken);
+        }
+
+        public ValueTask<Memory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            return InternalRequest(subject, request, msg => msg.Payload.ToArray().AsMemory(), timeout, cancellationToken);
+        }
+
+        public ValueTask<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            return InternalRequest(subject, Encoding.UTF8.GetBytes(request), msg => Encoding.UTF8.GetString(msg.Payload.Span), timeout, cancellationToken);
+        }
+
+        public ValueTask<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            return InternalRequest(subject, (serializer ?? Options.Serializer).Serialize(request), msg => (serializer ?? Options.Serializer).Deserialize<TResponse>(msg.Payload), timeout, cancellationToken);
         }
 
         public TContract GenerateContractClient<TContract>(string? baseSubject = null)
@@ -472,16 +571,12 @@
             baseSubject ??= $"{typeof(TContract).Namespace}.{typeof(TContract).Name}";
             baseSubject += ".>";
 
-            var subscriptionId = await SendSubscribe(baseSubject, queueGroup, cancellationToken);
-            await using var channel = NatsServerGenerator<TContract>.CreateServerProxy(this, baseSubject, queueGroup, subscriptionId, serializer ?? Options.Serializer, contract, taskScheduler);
-            _channels[subscriptionId] = channel;
-            
-            try
-            {
-                await channel.Listener(cancellationToken);
-            }
-            catch(OperationCanceledException)
-            { }
+            await NatsServerGenerator<TContract>.CreateServerProxy(this, baseSubject, queueGroup,  serializer ?? Options.Serializer, contract, taskScheduler).Listener(cancellationToken);
+        }
+
+        internal void ServerException(object sender, NatsMsg msg, Exception exception)
+        {
+            ConnectionException?.Invoke(sender, new NatsServerException(msg, exception));
         }
     }
 }

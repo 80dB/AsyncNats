@@ -32,10 +32,9 @@
 
         static async Task ListenerTask(NatsConnection connection, CancellationToken cancellationToken)
         {
-            await using var subscription = await connection.SubscribeText("long.message");
-            await foreach (var request in subscription.WithCancellation(cancellationToken))
+            await foreach (var text in connection.SubscribeText("long.message", cancellationToken: cancellationToken))
             {
-                Console.WriteLine("Received string {0} characters long", request.Payload.Length);
+                Console.WriteLine("Received string {0} characters long", text.Length);
                 break;
             }
         }
@@ -51,7 +50,7 @@
 
             var str = sb.ToString();
             Console.WriteLine("Sending string {0} characters long", str.Length);
-            await connection.PublishTextAsync("long.message", str);
+            await connection.PublishTextAsync("long.message", str, cancellationToken: cancellationToken);
         }
     }
 }

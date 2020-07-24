@@ -9,10 +9,9 @@ There are currently no known issues. But the library has not been rigorously tes
 ## Known limitations
 * No TLS support [and it will probably never be supported]
 * Proper documentation, working on it ;)
-* The RPC implementation does not support Cancellation tokes (but does obey the Request-timeout as specified by the INatsOptions)
-* The RPC implementation does not support overloads, it not work properly with multiple methods with the same name
-* The RPC implementation only supports methods
-* The RPC implementation is "single threaded" (Well single task)
+* The RPC implementation does not support Cancellation tokens (but does obey the Request-timeout as specified by the INatsOptions)
+* The RPC implementation does not support overloads, it does not work properly with multiple methods with the same name
+* The RPC implementation only supports methods, it does not support properties or fields
 * The RPC implementation does not support generic methods
 * Remote exceptions do not include the remote stack trace and *might* fail if the Exception is not serializable by BinaryFormatter
 
@@ -27,29 +26,19 @@ PublishMemoryAsync // This method publishes a raw byte array (in the form of Mem
 
 You can subscribe to subjects with the following methods:
 ```C#
-SubscribeAll // This method returns *all* messages that the connection receives but does *not* allow you to supply a subject. Mostly used for debugging.
-Subscribe // This method returns messages send to the specified subject but does not perform any deserialization
+Subscribe // This method returns messages send to the specified subject but does not perform any deserialization, *the payload is only valid until the next message has been enumerated*
 Subscribe<T> // This method returns deserialized messages send to the specified subject
 SubscribeObject<T> // This method is similar to Subscribe<T> but does not wrap the enumerated objects in a NatsTypedMsg, use this if you do not care about subject/subscriptionId/replyTo
 SubscribeText // This method is similar to Subscribe<T> except that it only UTF8 decodes the payload
 ```
 
-The returned subscriptions are AsyncEnumerable objects and can be enumerated using the new await foreach:
+The returned subscriptions are AsyncEnumerables and can be enumerated using the new await foreach:
 ```C#
-await using var subscription = connection.SubscribeText("HELLO");
-await foreach(var message in subscription)
+await foreach(var message in connection.SubscribeText("HELLO"))
 {
 	// Process message here
 }
 ```
-
-As the above example shows, the subscriptions also implement AsyncDisposable. You can either use AsyncDisposable or use the Unsubscribe method. The following example is the same as using the await using:
-```C#
-var subscription = await connection.SubscribeText("HELLO");
-//
-await connection.Unsubscribe(subscription);
-```
-Failure to dispose or unsubcribe a subscription means the message queue will fill up and the connection will stop receiving messages!
 
 There's also the option to perform requests using the following methods:
 ```C#
@@ -74,7 +63,14 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
-### v0.7.0
+### v0.8.0
+* Breaking change: Rewrote subscriptions to make them a bit easier to use
+* Breaking change: Removed "SubscribeAll", it made the process loop more difficult and wasn't of much use
+* Slightly increased performance of message process loop
+* The RPC Server proxy would eat exceptions if tasks got executed by the task scheduler/factory
+* All deserialize and RPC server exceptions are now passed to ConnectionException event handler
+
+### v0.7.1
 * Pipe did not support multiple simultaneous WriteAsync's, rewrote to use Channel instead with an internal 1Mb socket buffer (it's actually faster)
 
 ### v0.7.0

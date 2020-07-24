@@ -74,16 +74,14 @@
 
         static async Task AddListenerAsync(NatsConnection connection, CancellationToken cancellationToken)
         {
-            await using var subscription = await connection.Subscribe<Request>("add");
-            await foreach (var request in subscription.WithCancellation(cancellationToken))
-                await connection.PublishObjectAsync(request.ReplyTo, new Response {Result = request.Payload.X + request.Payload.Y});
+            await foreach (var request in connection.Subscribe<Request>("add", cancellationToken: cancellationToken))
+                await connection.PublishObjectAsync(request.ReplyTo, new Response {Result = request.Payload.X + request.Payload.Y}, cancellationToken: cancellationToken);
         }
 
         static async Task MultiplyListenerAsync(NatsConnection connection, CancellationToken cancellationToken)
         {
-            await using var subscription = await connection.Subscribe<Request>("multiply");
-            await foreach (var request in subscription.WithCancellation(cancellationToken))
-                await connection.PublishObjectAsync(request.ReplyTo, new Response {Result = request.Payload.X * request.Payload.Y});
+            await foreach (var request in connection.Subscribe<Request>("multiply", cancellationToken: cancellationToken))
+                await connection.PublishObjectAsync(request.ReplyTo, new Response {Result = request.Payload.X * request.Payload.Y}, cancellationToken: cancellationToken);
         }
 
         static async Task SenderAsync(NatsConnection connection, CancellationToken cancellationToken)
