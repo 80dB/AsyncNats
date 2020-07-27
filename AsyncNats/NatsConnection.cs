@@ -179,7 +179,7 @@
         {
             while (!disconnectToken.IsCancellationRequested)
             {
-                var memory = writer.GetMemory();
+                var memory = writer.GetMemory(socket.Available);
 
                 var readBytes = await socket.ReceiveAsync(memory, SocketFlags.None, disconnectToken);
                 if (readBytes == 0) break;

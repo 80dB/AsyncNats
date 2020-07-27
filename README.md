@@ -63,6 +63,10 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.8.1
+* Upgraded dependencies
+* Fixed a small issue with System.IO.Pipelines
+
 ### v0.8.0
 * Breaking change: Rewrote subscriptions to make them a bit easier to use
 * Breaking change: Removed "SubscribeAll", it made the process loop more difficult and wasn't of much use
