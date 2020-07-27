@@ -63,6 +63,11 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.8.2
+* Refactored Subscribe a little bit
+* Added a missing memory-rent which could corrupt memory in high message volumes
+* Changed from ArrayPool to a custom MemoryPool to improve overal performance
+
 ### v0.8.1
 * Upgraded dependencies
 * Fixed a small issue with System.IO.Pipelines

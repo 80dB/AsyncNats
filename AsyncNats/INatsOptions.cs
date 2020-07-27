@@ -1,7 +1,7 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
     using System;
-    using System.IO.Pipelines;
+    using System.Buffers;
     using System.Net;
 
     public interface INatsOptions
@@ -9,12 +9,10 @@
         IPEndPoint Server { get; }
 
         int SenderQueueLength { get; }
-        PipeOptions SenderPipeOptions { get; }
 
         int ReceiverQueueLength { get; }
-        PipeOptions ReceiverPipeOptions { get; }
 
-        int FlushAtLeastEvery { get; }
+        ArrayPool<byte> ArrayPool { get; }
 
         INatsSerializer Serializer { get; }
 

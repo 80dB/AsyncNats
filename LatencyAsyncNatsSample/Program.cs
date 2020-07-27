@@ -21,11 +21,8 @@
         {
             var options = new NatsDefaultOptions
             {
-                SenderPipeOptions = new PipeOptions(pauseWriterThreshold: 1024*1024*10, resumeWriterThreshold: 1024*1024, useSynchronizationContext: false),
                 SenderQueueLength = 5000,
-                ReceiverPipeOptions = new PipeOptions(pauseWriterThreshold: 1024*1024*10, resumeWriterThreshold: 1024*1024, useSynchronizationContext: false),
                 ReceiverQueueLength = 500,
-                FlushAtLeastEvery = 1
             };
 
             await using var readerConnection = new NatsConnection(options);

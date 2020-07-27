@@ -15,16 +15,15 @@
             await writer.WriteAsync(_command);
         }
 
-        public static INatsServerMessage ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
+        public static INatsServerMessage ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
             return new NatsPong();
         }
 
-        public static byte[] RentedSerialize()
+        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(_command.Length + 4);
-            BitConverter.TryWriteBytes(buffer, _command.Length);
-            _command.CopyTo(buffer.AsMemory(4));
+            var buffer = pool.Rent(_command.Length);
+            _command.CopyTo(buffer.Memory);
             return buffer;
         }
     }

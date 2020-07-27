@@ -62,23 +62,23 @@
             Echo = options.Echo;
         }
 
-        public static byte[] RentedSerialize(NatsConnect msg)
+        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool, NatsConnect msg)
         {
             var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions {IgnoreNullValues = true});
-            var buffer = ArrayPool<byte>.Shared.Rent(serialized.Length + _command.Length + _end.Length + 4);
+            var hint = _command.Length +
+                       serialized.Length +
+                       _end.Length;
 
-            var consumed = 4;
-            _command.CopyTo(buffer.AsMemory(consumed));
-            consumed += _command.Length;
+            var rented = pool.Rent(hint);
+            var buffer = rented.Memory;
+            _command.CopyTo(buffer);
+            var consumed = _command.Length;
 
-            serialized.CopyTo(buffer.AsMemory(consumed));
+            serialized.CopyTo(buffer.Slice(consumed));
             consumed += serialized.Length;
 
-            _end.CopyTo(buffer.AsMemory(consumed));
-            consumed += _end.Length;
-
-            BitConverter.TryWriteBytes(buffer, consumed - 4);
-            return buffer;
+            _end.CopyTo(buffer.Slice(consumed));
+            return rented;
         }
     }
 }

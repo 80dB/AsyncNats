@@ -35,7 +35,7 @@
         [JsonPropertyName("client_id")]
         public int ClientId { get; set; }
 
-        public static INatsServerMessage? ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
+        public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
             // Remove "INFO " and parse remainder as JSON
             return JsonSerializer.Deserialize<NatsInformation>(line.Slice(5));

@@ -17,7 +17,7 @@
         public void ReturnNatsInformation()
         {
             var reader = new SequenceReader<byte>();
-            var info = NatsInformation.ParseMessage(_memory.Span, ref reader);
+            var info = NatsInformation.ParseMessage(new NatsMemoryPool(), _memory.Span, ref reader);
             Assert.IsType<NatsInformation>(info);
         }
 
@@ -25,7 +25,7 @@
         public void ReturnSameServerId()
         {
             var reader = new SequenceReader<byte>();
-            var info = (NatsInformation) NatsInformation.ParseMessage(_memory.Span, ref reader);
+            var info = (NatsInformation) NatsInformation.ParseMessage(new NatsMemoryPool(), _memory.Span, ref reader);
             Assert.Equal(_serverId, info.ServerId);
         }
     }

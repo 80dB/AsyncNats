@@ -19,35 +19,29 @@
         [Fact]
         public void EndWithCRLF()
         {
-            var rented = NatsConnect.RentedSerialize(_connect);
-            var consumed = BitConverter.ToInt32(rented);
-            var text = Encoding.UTF8.GetString(rented, 4, consumed);
+            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
             Assert.EndsWith("\r\n", text);
-            ArrayPool<byte>.Shared.Return(rented);
         }
 
         [Fact]
         public void StartWithConnect()
         {
-            var rented = NatsConnect.RentedSerialize(_connect);
-            var consumed = BitConverter.ToInt32(rented);
-            var text = Encoding.UTF8.GetString(rented, 4, consumed);
+            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
             Assert.StartsWith("CONNECT", text);
-            ArrayPool<byte>.Shared.Return(rented);
         }
 
         [Fact]
         public void BeSame()
         {
-            var rented = NatsConnect.RentedSerialize(_connect);
-            var consumed = BitConverter.ToInt32(rented);
-            var text = Encoding.UTF8.GetString(rented, 4, consumed);
+            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             text = text.Replace("CONNECT ", "");
             text = text.Replace("\r\n", "");
 
             Assert.Equal(JsonSerializer.Serialize(_connect, new JsonSerializerOptions {IgnoreNullValues = true}), text);
-            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 }

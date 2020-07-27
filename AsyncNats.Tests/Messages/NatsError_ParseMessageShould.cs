@@ -15,7 +15,7 @@
         public void ReturnNatsError()
         {
             var reader = new SequenceReader<byte>();
-            var err = NatsError.ParseMessage(_withErrorMessage.Span, ref reader);
+            var err = NatsError.ParseMessage(new NatsMemoryPool(), _withErrorMessage.Span, ref reader);
             Assert.IsType<NatsError>(err);
         }
 
@@ -23,7 +23,7 @@
         public void WorkWithMessage()
         {
             var reader = new SequenceReader<byte>();
-            var err = (NatsError) NatsError.ParseMessage(_withErrorMessage.Span, ref reader);
+            var err = (NatsError) NatsError.ParseMessage(new NatsMemoryPool(), _withErrorMessage.Span, ref reader);
             Assert.Equal("Stale Connection", err.Error);
         }
 
@@ -31,7 +31,7 @@
         public void WorkWithoutMessage()
         {
             var reader = new SequenceReader<byte>();
-            var err = (NatsError) NatsError.ParseMessage(_withoutErrorMessage.Span, ref reader);
+            var err = (NatsError) NatsError.ParseMessage(new NatsMemoryPool(), _withoutErrorMessage.Span, ref reader);
             Assert.Null(err.Error);
         }
     }

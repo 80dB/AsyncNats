@@ -21,37 +21,40 @@
             await writer.WriteAsync(Encoding.UTF8.GetBytes($"UNSUB {SubscriptionId} {MaxMessages}\r\n"));
         }
 
-        public static byte[] RentedSerialize(string subscriptionId, int? maxMessages)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subscriptionId, int? maxMessages)
         {
-            var length = 4;
-            length += _command.Length;
-            length += subscriptionId.Length;
+            var hint = _command.Length;
+            hint += subscriptionId.Length;
             if (maxMessages != null)
             {
-                length += 7;
-                length += _del.Length;
+                if (maxMessages < 9) hint += 1;
+                else if (maxMessages < 99) hint += 2;
+                else if (maxMessages < 999) hint += 3;
+                else if (maxMessages < 9_999) hint += 4;
+                else if (maxMessages < 99_999) hint += 5;
+                else if (maxMessages < 999_999) hint += 6;
+                else if (maxMessages < 9_999_999) hint += 7;
+                else throw new ArgumentOutOfRangeException(nameof(maxMessages));
+                hint += _del.Length;
             }
 
-            length += _end.Length;
+            hint += _end.Length;
 
-            var buffer = ArrayPool<byte>.Shared.Rent(length);
-            var consumed = 4;
-            _command.CopyTo(buffer.AsMemory(consumed));
-            consumed += _command.Length;
-            consumed += Encoding.UTF8.GetBytes(subscriptionId, buffer.AsSpan(consumed));
+            var rented = pool.Rent(hint);
+            var buffer = rented.Memory;
+            _command.CopyTo(buffer);
+            var consumed = _command.Length;
+            consumed += Encoding.UTF8.GetBytes(subscriptionId, buffer.Slice(consumed).Span);
             if (maxMessages != null)
             {
-                _del.CopyTo(buffer.AsMemory(consumed));
+                _del.CopyTo(buffer.Slice(consumed));
                 consumed += _del.Length;
-                Utf8Formatter.TryFormat(maxMessages.Value, buffer.AsSpan(consumed), out var written);
+                Utf8Formatter.TryFormat(maxMessages.Value, buffer.Slice(consumed).Span, out var written);
                 consumed += written;
             }
 
-            _end.CopyTo(buffer.AsMemory(consumed));
-            consumed += _end.Length;
-
-            BitConverter.TryWriteBytes(buffer, consumed - 4);
-            return buffer;
+            _end.CopyTo(buffer.Slice(consumed));
+            return rented;
         }
     }
 }

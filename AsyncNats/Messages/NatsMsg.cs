@@ -11,7 +11,7 @@
     {
         private static readonly byte[] _empty = new byte[0];
         private int _referenceCounter;
-        private byte[] _rentedPayload = _empty;
+        private IMemoryOwner<byte>? _rentedPayload;
 
         public string Subject { get; set; } = string.Empty;
         public string SubscriptionId { get; set; } = string.Empty;
@@ -26,10 +26,13 @@
         public void Release()
         {
             if (Interlocked.Decrement(ref _referenceCounter) == 0)
-                ArrayPool<byte>.Shared.Return(_rentedPayload);
+            {
+                _rentedPayload?.Dispose();
+                _rentedPayload = null;
+            }
         }
 
-        public static INatsServerMessage? ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
+        public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
             var next = line.Slice(4); // Remove "MSG "
             var part = next.Slice(0, next.IndexOf((byte) ' '));
@@ -54,10 +57,10 @@
 
             if (reader.Remaining < payloadSize + 2) return null;
 
-            var payload = ArrayPool<byte>.Shared.Rent(payloadSize);
-            reader.Sequence.Slice(reader.Position, payloadSize).CopyTo(payload);
+            var payload = pool.Rent(payloadSize);
+            reader.Sequence.Slice(reader.Position, payloadSize).CopyTo(payload.Memory.Span);
             reader.Advance(payloadSize + 2);
-            return new NatsMsg {Subject = subject, Payload = payload.AsMemory(0, payloadSize), _rentedPayload = payload, ReplyTo = replyTo, SubscriptionId = sid, _referenceCounter = 1};
+            return new NatsMsg {Subject = subject, Payload = payload.Memory, _rentedPayload = payload, ReplyTo = replyTo, SubscriptionId = sid, _referenceCounter = 1};
         }
     }
 }

@@ -11,47 +11,51 @@
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        public static byte[] RentedSerialize(string subject, string? replyTo, ReadOnlyMemory<byte> payload)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subject, string? replyTo, ReadOnlyMemory<byte> payload)
         {
-            var hint = 4;
-            hint += _command.Length; // PUB
+            var hint = _command.Length; // PUB
             hint += subject.Length + 1; // Subject + space
             hint += replyTo?.Length + 1 ?? 0; // ReplyTo
-            hint += 7; // Max payload size (1MB)
+            if (payload.Length < 9) hint += 1;
+            else if (payload.Length < 99) hint += 2;
+            else if (payload.Length < 999) hint += 3;
+            else if (payload.Length < 9_999) hint += 4;
+            else if (payload.Length < 99_999) hint += 5;
+            else if (payload.Length < 999_999) hint += 6;
+            else if (payload.Length < 9_999_999) hint += 7;
+            else throw new ArgumentOutOfRangeException(nameof(payload));
+
             hint += _end.Length; // Ending
             hint += payload.Length;
             hint += _end.Length; // Ending Payload
 
-            var buffer = ArrayPool<byte>.Shared.Rent(hint);
+            var rented = pool.Rent(hint);
+            var buffer = rented.Memory;
 
-            var consumed = 4;
-            _command.CopyTo(buffer.AsMemory(consumed));
-            consumed += _command.Length;
-            consumed += Encoding.UTF8.GetBytes(subject, buffer.AsSpan(consumed));
-            _del.CopyTo(buffer.AsMemory(consumed));
+            _command.CopyTo(buffer);
+            var consumed = _command.Length;
+            consumed += Encoding.ASCII.GetBytes(subject, buffer.Slice(consumed).Span);
+            _del.CopyTo(buffer.Slice(consumed));
             consumed++;
             if (!string.IsNullOrEmpty(replyTo))
             {
-                consumed += Encoding.UTF8.GetBytes(replyTo, buffer.AsSpan(consumed));
-                _del.CopyTo(buffer.AsMemory(consumed));
+                consumed += Encoding.UTF8.GetBytes(replyTo, buffer.Slice(consumed).Span);
+                _del.CopyTo(buffer.Slice(consumed));
                 consumed++;
             }
 
-            Utf8Formatter.TryFormat(payload.Length, buffer.AsSpan(consumed), out var written);
+            Utf8Formatter.TryFormat(payload.Length, buffer.Slice(consumed).Span, out var written);
             consumed += written;
-            _end.CopyTo(buffer.AsMemory(consumed));
+            _end.CopyTo(buffer.Slice(consumed));
             consumed += _end.Length;
             if (!payload.IsEmpty)
             {
-                payload.CopyTo(buffer.AsMemory(consumed));
+                payload.CopyTo(buffer.Slice(consumed));
                 consumed += payload.Length;
             }
 
-            _end.CopyTo(buffer.AsMemory(consumed));
-            consumed += _end.Length;
-
-            BitConverter.TryWriteBytes(buffer, consumed - 4);
-            return buffer;
+            _end.CopyTo(buffer.Slice(consumed));
+            return rented;
         }
     }
 }

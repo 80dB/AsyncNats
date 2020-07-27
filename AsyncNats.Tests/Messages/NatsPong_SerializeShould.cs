@@ -13,10 +13,8 @@
         [Fact]
         public void BeSame()
         {
-            var rented = NatsPong.RentedSerialize();
-            var consumed = BitConverter.ToInt32(rented);
-            var text = Encoding.UTF8.GetString(rented, 4, consumed);
-            ArrayPool<byte>.Shared.Return(rented);
+            using var rented = NatsPong.RentedSerialize(new NatsMemoryPool());
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             Assert.Equal("PONG\r\n", text);
         }

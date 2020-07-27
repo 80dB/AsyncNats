@@ -8,6 +8,13 @@
 
     public class NatsMessageParser
     {
+        private readonly NatsMemoryPool _memoryPool;
+
+        public NatsMessageParser(NatsMemoryPool memoryPool)
+        {
+            _memoryPool = memoryPool;
+        }
+
         private static readonly byte[] _information = Encoding.UTF8.GetBytes("INFO ");
         private static readonly byte[] _message = Encoding.UTF8.GetBytes("MSG ");
         private static readonly byte[] _ok = Encoding.UTF8.GetBytes("+OK");
@@ -15,7 +22,7 @@
         private static readonly byte[] _ping = Encoding.UTF8.GetBytes("PING");
         private static readonly byte[] _pong = Encoding.UTF8.GetBytes("PONG");
 
-        private delegate INatsServerMessage? ParseMessage(in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader);
+        private delegate INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader);
 
         private static readonly Tuple<byte[], ParseMessage>[] _messageParsers =
         {
@@ -48,7 +55,7 @@
                 }
 
                 if (parseMessage == null) throw new ProtocolViolationException($"Unknown message {Encoding.UTF8.GetString(line)}");
-                var message = parseMessage(line, ref reader);
+                var message = parseMessage(_memoryPool, line, ref reader);
                 if (message == null)
                 {
                     // Not enough information to parse the message
