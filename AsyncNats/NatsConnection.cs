@@ -273,6 +273,8 @@
                         result.Memory.CopyTo(buffer.AsMemory(position));
                         position += consumed;
                     }
+
+                    result.Dispose();
                 } while (reader.TryRead(out result));
 
                 if (position == 0) continue;
