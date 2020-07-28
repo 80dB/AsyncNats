@@ -63,6 +63,10 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.8.3
+* Publish (PUB) was reserving one byte too much when payload was 9, 99, 999, 9999, 99999, 999999 bytes large
+* Unsubscribe (UNSUB) was reserving one byte too much when max messages was 9, 99, 999, 9999, 99999, 999999 bytes large
+
 ### v0.8.2
 * Refactored Subscribe a little bit
 * Added a missing memory-rent which could corrupt memory in high message volumes

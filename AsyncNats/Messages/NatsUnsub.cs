@@ -27,13 +27,13 @@
             hint += subscriptionId.Length;
             if (maxMessages != null)
             {
-                if (maxMessages < 9) hint += 1;
-                else if (maxMessages < 99) hint += 2;
-                else if (maxMessages < 999) hint += 3;
-                else if (maxMessages < 9_999) hint += 4;
-                else if (maxMessages < 99_999) hint += 5;
-                else if (maxMessages < 999_999) hint += 6;
-                else if (maxMessages < 9_999_999) hint += 7;
+                if (maxMessages < 10) hint += 1;
+                else if (maxMessages < 100) hint += 2;
+                else if (maxMessages < 1_000) hint += 3;
+                else if (maxMessages < 10_000) hint += 4;
+                else if (maxMessages < 100_000) hint += 5;
+                else if (maxMessages < 1_000_000) hint += 6;
+                else if (maxMessages < 10_000_000) hint += 7;
                 else throw new ArgumentOutOfRangeException(nameof(maxMessages));
                 hint += _del.Length;
             }

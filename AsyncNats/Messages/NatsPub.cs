@@ -16,13 +16,13 @@
             var hint = _command.Length; // PUB
             hint += subject.Length + 1; // Subject + space
             hint += replyTo?.Length + 1 ?? 0; // ReplyTo
-            if (payload.Length < 9) hint += 1;
-            else if (payload.Length < 99) hint += 2;
-            else if (payload.Length < 999) hint += 3;
-            else if (payload.Length < 9_999) hint += 4;
-            else if (payload.Length < 99_999) hint += 5;
-            else if (payload.Length < 999_999) hint += 6;
-            else if (payload.Length < 9_999_999) hint += 7;
+            if (payload.Length < 10) hint += 1;
+            else if (payload.Length < 100) hint += 2;
+            else if (payload.Length < 1_000) hint += 3;
+            else if (payload.Length < 10_000) hint += 4;
+            else if (payload.Length < 100_000) hint += 5;
+            else if (payload.Length < 1_000_000) hint += 6;
+            else if (payload.Length < 10_000_000) hint += 7;
             else throw new ArgumentOutOfRangeException(nameof(payload));
 
             hint += _end.Length; // Ending

@@ -27,5 +27,14 @@
 
             Assert.Equal("UNSUB 1 5\r\n", text);
         }
+
+        [Fact]
+        public void BeSameWitMaxMessages999()
+        {
+            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), "1", 999);
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+
+            Assert.Equal("UNSUB 1 999\r\n", text);
+        }
     }
 }

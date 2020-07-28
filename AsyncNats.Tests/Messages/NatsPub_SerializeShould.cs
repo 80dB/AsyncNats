@@ -27,5 +27,16 @@
 
             Assert.Equal("PUB FRONT.DOOR INBOX.22 11\r\nKnock Knock\r\n", text);
         }
+
+        [Fact]
+        public void BeSameWithReplyToLength999()
+        {
+            var payload = new byte[999];
+            for (var i = 0; i < 999; i++) payload[i] = (byte)'*';
+            using var rented = NatsPub.RentedSerialize(new NatsMemoryPool(), "FRONT.DOOR", "INBOX.22", payload);
+            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+
+            Assert.Equal("PUB FRONT.DOOR INBOX.22 999\r\n" + Encoding.UTF8.GetString(payload) + "\r\n", text);
+        }
     }
 }
