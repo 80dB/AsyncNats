@@ -9,7 +9,7 @@
 
         public async Task<int> MultiplyAsync(int x, int y)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromSeconds(0.5));
             return x * y;
         }
 
@@ -41,12 +41,18 @@
 
         public void ThrowException()
         {
-            throw new Exception("Server exception");
+            throw new Exception("Server exception in ThrowException");
         }
 
         public Task<int> ThrowExceptionOnMethodWithReturn()
         {
-            throw new Exception("Server exception");
+            throw new Exception("Server exception in ThrowExceptionOnMethodWithReturn");
+        }
+
+        public async Task Timeout()
+        {
+            Console.WriteLine("Waiting 3 seconds, 1 second longer than timeout");
+            await Task.Delay(TimeSpan.FromSeconds(3));
         }
 
         public async Task FireAndForget(int x, int y, int z)

@@ -21,6 +21,8 @@
 
         Task<int> ThrowExceptionOnMethodWithReturn();
 
+        Task Timeout();
+
         [NatsFireAndForget]
         Task FireAndForget(int x, int y, int z);
     }

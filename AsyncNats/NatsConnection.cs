@@ -507,11 +507,12 @@
             // Combine cancellation token with timeout
             using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
             using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
+            var linkedCancellationToken = linkedSource.Token;
             
             var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
             var subscription = new Subscription(replyTo, null, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
 
-            await _subscriptionsLock.WaitAsync(cancellationToken);
+            await _subscriptionsLock.WaitAsync(linkedCancellationToken);
             try
             {
                 _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
@@ -521,11 +522,11 @@
                 _subscriptionsLock.Release();
             }
 
-            await SendSubscribe(subscription, cancellationToken);
-            await PublishMemoryAsync(subject, request, replyTo, cancellationToken);
+            await SendSubscribe(subscription, linkedCancellationToken);
+            await PublishMemoryAsync(subject, request, replyTo, linkedCancellationToken);
             try
             {
-                var message = await subscription.Reader.ReadAsync(cancellationToken);
+                var message = await subscription.Reader.ReadAsync(linkedCancellationToken);
                 try
                 {
                     return deserialize(message);

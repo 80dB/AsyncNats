@@ -63,6 +63,9 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.8.4
+* Timeout on RPC client did not work as intended would could make the caller hang indefinitely if the server did not respond
+
 ### v0.8.3
 * Publish (PUB) was reserving one byte too much when payload was 9, 99, 999, 9999, 99999, 999999 bytes large
 * Unsubscribe (UNSUB) was reserving one byte too much when max messages was 9, 99, 999, 9999, 99999, 999999 bytes large
