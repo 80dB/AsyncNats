@@ -15,6 +15,11 @@
         event EventHandler<NatsStatus>? StatusChange;
         event EventHandler<NatsInformation>? ConnectionInformation;
 
+        long SenderQueueSize { get; }
+        long ReceiverQueueSize { get; }
+        long TransmitBytesTotal { get; }
+        long ReceivedBytesTotal { get; }
+
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
 

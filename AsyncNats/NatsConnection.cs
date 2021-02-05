@@ -12,8 +12,8 @@
     using System.Threading;
     using System.Threading.Channels;
     using System.Threading.Tasks;
-    using EightyDecibel.AsyncNats.Messages;
-    using EightyDecibel.AsyncNats.Rpc;
+    using Messages;
+    using Rpc;
 
     public class NatsConnection : INatsConnection
     {
@@ -21,12 +21,14 @@
 
         private long _senderQueueSize;
         private long _receiverQueueSize;
+        private long _transmitBytesTotal;
+        private long _receivedBytesTotal;
 
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
-        private Channel<IMemoryOwner<byte>> _senderChannel;
+        private readonly Channel<IMemoryOwner<byte>> _senderChannel;
 
-        private NatsMemoryPool _memoryPool;
+        private readonly NatsMemoryPool _memoryPool;
         
         // Assignment of references are atomic
         // https://stackoverflow.com/questions/2192124/reference-assignment-is-atomic-so-why-is-interlocked-exchangeref-object-object
@@ -60,7 +62,7 @@
         }
 
         private NatsStatus _status;
-        private CancellationTokenSource _disposeTokenSource;
+        private readonly CancellationTokenSource _disposeTokenSource;
 
         public INatsOptions Options { get; }
 
@@ -80,6 +82,8 @@
 
         public long SenderQueueSize => _senderQueueSize;
         public long ReceiverQueueSize => _receiverQueueSize;
+        public long TransmitBytesTotal => _transmitBytesTotal;
+        public long ReceivedBytesTotal => _receivedBytesTotal;
 
         public NatsConnection()
             : this(new NatsDefaultOptions())
@@ -190,6 +194,7 @@
 
                 writer.Advance(readBytes);
                 Interlocked.Add(ref _receiverQueueSize, readBytes);
+                Interlocked.Add(ref _receivedBytesTotal, readBytes);
 
                 var flush = await writer.FlushAsync(disconnectToken);
                 if (flush.IsCompleted || flush.IsCanceled) break;
@@ -280,6 +285,7 @@
                 if (position == 0) continue;
 
                 await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
+                Interlocked.Add(ref _transmitBytesTotal, position);
             }
         }
 
@@ -299,6 +305,7 @@
                 {
                     using var buffer = NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
                     await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
+                    Interlocked.Add(ref _transmitBytesTotal, buffer.Memory.Length);
                 }
             }
             finally

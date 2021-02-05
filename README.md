@@ -63,6 +63,10 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v0.8.5
+* Added ReceivedBytesTotal and TransmitBytesTotal as properties to more monitor connection
+* Added SenderQueueSize, ReceiverQueueSize, ReceivedBytesTotal and TransmitBytesTotal to interface
+
 ### v0.8.4
 * Timeout on RPC client did not work as intended would could make the caller hang indefinitely if the server did not respond
 
