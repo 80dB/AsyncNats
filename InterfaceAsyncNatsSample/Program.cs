@@ -86,12 +86,37 @@
                 Console.WriteLine("Expected exception: {0}", ex.Message);
             }
 
+            var counter = 0;
+            var started = DateTime.UtcNow;
+            var performanceTest = Task.Run(async () =>
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    result = await client.MultiplyAsync(10, 10);
+                    if (result != 100) throw new Exception();
+                    counter++;
+                }
+            });
+
+            var reportPerformance = Task.Run(async () =>
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, cancellation.Token);
+                    var seconds = (DateTime.UtcNow - started).TotalSeconds;
+                    var perSecond = seconds > 0 ? counter / seconds : 0;
+                    Console.WriteLine($"{counter} in {seconds:N2}s ({perSecond:N2}/s)");
+                }
+            });
+
             Console.ReadKey();
 
             cancellation.Cancel();
 
             try
             {
+                await performanceTest;
+                await reportPerformance;
                 await listenerTask;
             }
             catch (OperationCanceledException)

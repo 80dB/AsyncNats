@@ -7,10 +7,9 @@
     {
         private Random _random = new Random();
 
-        public async Task<int> MultiplyAsync(int x, int y)
+        public Task<int> MultiplyAsync(int x, int y)
         {
-            await Task.Delay(TimeSpan.FromSeconds(0.5));
-            return x * y;
+            return Task.FromResult(x*y);
         }
 
         public int Add(int x, int y)

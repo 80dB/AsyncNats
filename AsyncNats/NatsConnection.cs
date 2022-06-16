@@ -27,6 +27,7 @@
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
+        private readonly NatsRequestResponse _requestResponse;
 
         private readonly NatsMemoryPool _memoryPool;
         
@@ -102,6 +103,8 @@
             _subscriptionsLock = new SemaphoreSlim(1, 1);
 
             _disposeTokenSource = new CancellationTokenSource();
+
+            _requestResponse = new NatsRequestResponse(this);
         }
 
         public ValueTask ConnectAsync()
@@ -491,7 +494,6 @@
 
             await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
             {
-
                 yield return msg;
             }
         }
@@ -509,55 +511,9 @@
             }
         }
 
-        private async ValueTask<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        private ValueTask<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            // Combine cancellation token with timeout
-            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
-            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
-            var linkedCancellationToken = linkedSource.Token;
-            
-            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
-            var subscription = new Subscription(replyTo, null, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
-
-            await _subscriptionsLock.WaitAsync(linkedCancellationToken);
-            try
-            {
-                _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
-            }
-            finally
-            {
-                _subscriptionsLock.Release();
-            }
-
-            await SendSubscribe(subscription, linkedCancellationToken);
-            await PublishMemoryAsync(subject, request, replyTo, linkedCancellationToken);
-            try
-            {
-                var message = await subscription.Reader.ReadAsync(linkedCancellationToken);
-                try
-                {
-                    return deserialize(message);
-                }
-                catch (Exception e)
-                {
-                    ConnectionException?.Invoke(this, new NatsDeserializeException(message, e));
-                    throw;
-                }
-            }
-            finally
-            {
-                // No cancellation token for the unsubscribe
-                await _subscriptionsLock.WaitAsync(CancellationToken.None);
-                try
-                {
-                    await SendUnsubscribe(subscription);
-                    _subscriptions = _subscriptions.Where(s =>s != subscription).ToArray();
-                }
-                finally
-                {
-                    _subscriptionsLock.Release();
-                }
-            }
+            return _requestResponse.InternalRequest(subject, request, deserialize, timeout, cancellationToken);
         }
 
         public ValueTask<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
