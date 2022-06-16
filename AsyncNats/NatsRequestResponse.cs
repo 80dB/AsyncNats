@@ -58,7 +58,7 @@ namespace EightyDecibel.AsyncNats
             }
         }
         
-        internal async ValueTask<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        internal async Task<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             // First start the listener if it's not listening yet
             StartListener();
