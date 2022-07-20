@@ -15,7 +15,7 @@
         {
             var options = new NatsDefaultOptions
             {
-                Echo = true // Without echo this test does not work! On production you might want to keep it disabled
+                //Echo = true // Without echo this test does not work! On production you might want to keep it disabled
             };
             options.Serializer = new NatsAsciiSerializer();
             var connection = new NatsConnection(options);
@@ -23,9 +23,15 @@
             connection.StatusChange += (sender, status) => Console.WriteLine($"Connection status changed to {status}");
             connection.ConnectionInformation += (sender, information) => Console.WriteLine($"Connection information {JsonSerializer.Serialize(information)}");
 
+            var connection2 = new NatsConnection(options);
+            connection2.ConnectionException += (sender, exception) => Console.WriteLine($"ConnectionException : {exception}");
+            connection2.StatusChange += (sender, status) => Console.WriteLine($"Connection status changed to {status}");
+            connection2.ConnectionInformation += (sender, information) => Console.WriteLine($"Connection information {JsonSerializer.Serialize(information)}");
+
             var cancellation = new CancellationTokenSource();
 
             await connection.ConnectAsync();
+            await connection2.ConnectAsync();
 
             var count = 0;
             while (connection.Status != NatsStatus.Connected)
@@ -36,13 +42,25 @@
                 {
                     Console.WriteLine("Could not connect to nats server");
                     await connection.DisposeAsync();
+                    await connection2.DisposeAsync();
+                    return;
+                }
+            }
+            while (connection2.Status != NatsStatus.Connected)
+            {
+                await Task.Delay(50, cancellation.Token);
+                count++;
+                if (count > 100)
+                {
+                    Console.WriteLine("Could not connect to nats server");
+                    await connection.DisposeAsync();
+                    await connection2.DisposeAsync();
                     return;
                 }
             }
 
-
             var readerTypedTask = Task.Run(() => ReaderText(connection, cancellation.Token));
-            var writerTask = Task.Run(() => WriterText(connection, cancellation.Token));
+            var writerTask = Task.Run(() => WriterText(connection2, cancellation.Token));
 
             Console.ReadKey();
 
@@ -66,6 +84,7 @@
             Console.ReadKey();
 
             await connection.DisposeAsync();
+            await connection2.DisposeAsync();
 
             Console.ReadKey();
         }
