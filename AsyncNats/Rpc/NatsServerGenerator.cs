@@ -1,4 +1,7 @@
-﻿namespace EightyDecibel.AsyncNats.Rpc
+﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
+
+namespace EightyDecibel.AsyncNats.Rpc
 {
     using EightyDecibel.AsyncNats.Messages;
     using System;
@@ -144,12 +147,44 @@
             var requestType = GetRequestType(contractMethod);
             if (requestType != typeof(void))
             {
+                var hasLogger = il.DefineLabel();
+                var notLogger = il.DefineLabel();
+
                 var local = il.DeclareLocal(requestType);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, typeof(NatsServerProxy<TContract>).GetField("_serializer", BindingFlags.NonPublic | BindingFlags.Instance));
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Callvirt, typeof(INatsSerializer).GetMethod("Deserialize").MakeGenericMethod(requestType));
                 il.Emit(OpCodes.Stloc, local.LocalIndex);
+
+                // Log parameters
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, typeof(NatsServerProxy<TContract>).GetField("_logger", BindingFlags.NonPublic | BindingFlags.Instance));
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Brtrue_S, hasLogger);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Br_S, notLogger);
+
+                il.MarkLabel(hasLogger);
+                il.Emit(OpCodes.Ldstr, "Invoke {Method} with {Parameters}");
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, typeof(object));
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldstr, contractMethod.Name);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldloc_0);
+                il.Emit(OpCodes.Ldloc_0);
+                il.EmitCall(OpCodes.Call, typeof(object).GetMethod("GetType"), Array.Empty<Type>());
+                il.Emit(OpCodes.Ldnull);
+                il.EmitCall(OpCodes.Call, typeof(JsonSerializer).GetMethod("Serialize", new [] { typeof(object), typeof(Type), typeof(JsonSerializerOptions) }), new[] { typeof(object), typeof(Type), typeof(JsonSerializerOptions) });
+                il.Emit(OpCodes.Stelem_Ref);
+                il.EmitCall(OpCodes.Call, typeof(LoggerExtensions).GetMethod("LogTrace", new [] { typeof(ILogger), typeof(string), typeof(object[]) }), new[] { typeof(ILogger), typeof(string), typeof(object[]) });
+                il.Emit(OpCodes.Nop);
+
+                il.MarkLabel(notLogger);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, typeof(NatsServerProxy<TContract>).GetField("_contract", BindingFlags.NonPublic | BindingFlags.Instance));
                 for (var i = 0; i < contractMethod.GetParameters().Length; i++)

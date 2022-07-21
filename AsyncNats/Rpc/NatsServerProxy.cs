@@ -1,4 +1,6 @@
-﻿namespace EightyDecibel.AsyncNats.Rpc
+﻿using Microsoft.Extensions.Logging;
+
+namespace EightyDecibel.AsyncNats.Rpc
 {
     using EightyDecibel.AsyncNats.Messages;
     using System;
@@ -19,6 +21,8 @@
         protected readonly string _subject;
         protected readonly string? _queueGroup;
 
+        protected readonly ILogger? _logger;
+
         private Dictionary<string, (InvokeAsyncDelegate invoke, SerializeDelegate serialize)> _asyncMethods;
         private Dictionary<string, InvokeDelegate> _syncMethods;
         private TaskScheduler? _taskScheduler;
@@ -26,6 +30,7 @@
         internal NatsServerProxy(NatsConnection parent, string subject, string? queueGroup, INatsSerializer serializer, TContract contract, TaskScheduler? taskScheduler, IReadOnlyDictionary<string, (MethodInfo invoke, MethodInfo serialize)> asyncMethods, IReadOnlyDictionary<string, MethodInfo> syncMethods)
         {
             _parent = parent;
+            _logger = _parent.Options.LoggerFactory?.CreateLogger($"EightyDecibel.AsyncNats.Rpc.NatsServerProxy<{typeof(TContract).Name}>");
             _serializer = serializer;
             _contract = contract;
             _taskScheduler = taskScheduler;
@@ -51,6 +56,7 @@
 
         public async Task Listener(CancellationToken cancellationToken = default)
         {
+            _logger?.LogTrace("Starting contract server listener");
             var taskFactory = _taskScheduler != null ? new TaskFactory(_taskScheduler) : null;
             await foreach(var msg in _parent.Subscribe(_subject, _queueGroup, cancellationToken))
             {
@@ -61,19 +67,22 @@
                     var method = msg.Subject.Substring((_subject ?? string.Empty).Length - 1);
                     if (_asyncMethods.TryGetValue(method, out var delegates))
                     {
-                        if (taskFactory == null) await InvokeAsync(delegates.invoke, delegates.serialize, msg, cancellationToken);
+                        if (taskFactory == null) await InvokeAsync(method, delegates.invoke, delegates.serialize, msg, cancellationToken);
 #pragma warning disable 4014
-                        else taskFactory.StartNew(() => InvokeAsync(delegates.invoke, delegates.serialize, msg, cancellationToken), cancellationToken);
+                        else taskFactory.StartNew(() => InvokeAsync(method, delegates.invoke, delegates.serialize, msg, cancellationToken), cancellationToken);
 #pragma warning restore 4014
                     }
                     else if (_syncMethods.TryGetValue(method, out var invoke))
                     {
-                        if (taskFactory == null) await InvokeSync(invoke, msg, cancellationToken);
+                        if (taskFactory == null) await InvokeSync(method, invoke, msg, cancellationToken);
 #pragma warning disable 4014
-                        else taskFactory.StartNew(() => InvokeSync(invoke, msg, cancellationToken), cancellationToken);
+                        else taskFactory.StartNew(() => InvokeSync(method, invoke, msg, cancellationToken), cancellationToken);
 #pragma warning restore 4014
                     }
-                    else throw new KeyNotFoundException("Unknown method");
+                    else
+                    {
+                        throw new KeyNotFoundException("Unknown method");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -82,12 +91,14 @@
                 catch (Exception ex)
                 {
                     // Catch remaining exceptions (shouldn't be any) and pass them 
+                    _logger?.LogError(ex, "Exception in contract server listener");
                     _parent.ServerException(this, msg, ex);
                 }
             }
+            _logger?.LogTrace("Exited contract server listener");
         }
 
-        private async Task InvokeSync(InvokeDelegate invoke, NatsMsg msg, CancellationToken cancellationToken)
+        private async Task InvokeSync(string method, InvokeDelegate invoke, NatsMsg msg, CancellationToken cancellationToken)
         {
             try
             {
@@ -97,6 +108,8 @@
             }
             catch (Exception ex)
             {
+                _logger?.LogWarning(ex, "{Method} threw an exception", method);
+
                 if (!string.IsNullOrEmpty(msg.ReplyTo))
                 {
                     await using var ms = new MemoryStream();
@@ -110,11 +123,12 @@
             }
             finally
             {
+                _logger?.LogTrace("{Method} finished", method);
                 msg.Release();
             }
         }
 
-        private async Task InvokeAsync(InvokeAsyncDelegate invoke, SerializeDelegate serialize, NatsMsg msg, CancellationToken cancellationToken)
+        private async Task InvokeAsync(string method, InvokeAsyncDelegate invoke, SerializeDelegate serialize, NatsMsg msg, CancellationToken cancellationToken)
         {
             try
             {
@@ -126,6 +140,8 @@
             }
             catch (Exception ex)
             {
+                _logger?.LogWarning(ex, "{Method} threw an exception", method);
+
                 if (!string.IsNullOrEmpty(msg.ReplyTo))
                 {
                     await using var ms = new MemoryStream();
@@ -139,6 +155,7 @@
             }
             finally
             {
+                _logger?.LogTrace("{Method} finished", method);
                 msg.Release();
             }
         }

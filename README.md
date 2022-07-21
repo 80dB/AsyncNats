@@ -63,6 +63,12 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v1.0.0
+* Requests will only use a single subscription instead of setting up a new subscription every request/response
+* Moved request/response handling to it's own separate class
+* Added ILoggerFactory support, RPC is logged, raw request/response/publish is not
+* Bumped to v1.0.0 - This library has been tested in a production environment that handles 50-100k messages/sec
+
 ### v0.8.5
 * Added ReceivedBytesTotal and TransmitBytesTotal as properties to more monitor connection
 * Added SenderQueueSize, ReceiverQueueSize, ReceivedBytesTotal and TransmitBytesTotal to interface

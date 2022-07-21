@@ -5,6 +5,7 @@
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.Extensions.Logging;
 
     class Program
     {
@@ -15,6 +16,16 @@
                 Serializer = new NatsMessagePackSerializer(),
                 Echo = true, // Without echo this test does not work! On production you might want to keep it disabled
                 RequestTimeout = TimeSpan.FromSeconds(2),
+
+                // Adding logging should only be done in dev-environments
+                LoggerFactory = LoggerFactory.Create(configure =>
+                {
+                    configure.AddSimpleConsole();
+                    configure.SetMinimumLevel(LogLevel.Trace);
+
+                    // Filter out the RPC log lines
+                    configure.AddFilter("EightyDecibel.AsyncNats.Rpc", LogLevel.Error);
+                })
             };
 
             var connection = new NatsConnection(options);
@@ -86,12 +97,37 @@
                 Console.WriteLine("Expected exception: {0}", ex.Message);
             }
 
+            var counter = 0;
+            var started = DateTime.UtcNow;
+            var performanceTest = Task.Run(async () =>
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    result = await client.MultiplyAsync(10, 10);
+                    if (result != 100) throw new Exception();
+                    counter++;
+                }
+            });
+
+            var reportPerformance = Task.Run(async () =>
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, cancellation.Token);
+                    var seconds = (DateTime.UtcNow - started).TotalSeconds;
+                    var perSecond = seconds > 0 ? counter / seconds : 0;
+                    Console.WriteLine($"{counter} in {seconds:N2}s ({perSecond:N2}/s)");
+                }
+            });
+
             Console.ReadKey();
 
             cancellation.Cancel();
 
             try
             {
+                await performanceTest;
+                await reportPerformance;
                 await listenerTask;
             }
             catch (OperationCanceledException)

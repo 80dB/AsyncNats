@@ -14,10 +14,13 @@
     using System.Threading.Tasks;
     using Messages;
     using Rpc;
+    using Microsoft.Extensions.Logging;
 
     public class NatsConnection : INatsConnection
     {
         private static long _nextSubscriptionId = 1;
+
+        private ILogger<NatsConnection>? _logger;
 
         private long _senderQueueSize;
         private long _receiverQueueSize;
@@ -27,6 +30,7 @@
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
+        private readonly NatsRequestResponse _requestResponse;
 
         private readonly NatsMemoryPool _memoryPool;
         
@@ -71,6 +75,8 @@
             get => _status;
             private set
             {
+                _logger?.LogTrace("NatsConnection status changed from {Previous} to {Status}", _status, value);
+
                 _status = value;
                 StatusChange?.Invoke(this, value);
             }
@@ -102,12 +108,25 @@
             _subscriptionsLock = new SemaphoreSlim(1, 1);
 
             _disposeTokenSource = new CancellationTokenSource();
+
+            _requestResponse = new NatsRequestResponse(this);
+
+            _logger = options.LoggerFactory?.CreateLogger<NatsConnection>();
         }
 
         public ValueTask ConnectAsync()
         {
-            if (_disposeTokenSource.IsCancellationRequested) throw new ObjectDisposedException("Connection already disposed");
-            if (_disconnectSource != null) throw new InvalidAsynchronousStateException("Already connected");
+            if (_disposeTokenSource.IsCancellationRequested)
+            {
+                _logger?.LogError("Connection already disposed");
+                throw new ObjectDisposedException("Connection already disposed");
+            }
+
+            if (_disconnectSource != null)
+            {
+                _logger?.LogError("Already connected");
+                throw new InvalidAsynchronousStateException("Already connected");
+            }
 
             _disconnectSource = new CancellationTokenSource();
 
@@ -118,6 +137,7 @@
 
         private async Task ReadWriteAsync(CancellationToken disconnectToken)
         {
+            _logger?.LogTrace("Starting connection loop");
             while (!disconnectToken.IsCancellationRequested)
             {
                 Status = NatsStatus.Connecting;
@@ -129,10 +149,12 @@
 
                 try
                 {
+                    _logger?.LogTrace("Connecting to {Server}", Options.Server);
                     await socket.ConnectAsync(Options.Server);
                 }
                 catch (Exception ex)
                 {
+                    _logger?.LogError(ex, "Error connecting to {Server}", Options.Server);
                     ConnectionException?.Invoke(this, ex);
 
                     await Task.Delay(TimeSpan.FromSeconds(1), disconnectToken);
@@ -149,6 +171,8 @@
                 // ReSharper restore AccessToDisposedClosure
                 try
                 {
+                    _logger?.LogTrace("Connected to {Server}", Options.Server);
+
                     Status = NatsStatus.Connected;
                     Task.WaitAny(new[] {readTask, processTask, writeTask}, disconnectToken);
                 }
@@ -157,12 +181,17 @@
                 }
                 catch (Exception ex)
                 {
+                    _logger?.LogError(ex, "Exception in the connection loop");
+
                     ConnectionException?.Invoke(this, ex);
                 }
 
                 internalDisconnect.Cancel();
+                
+                _logger?.LogTrace("Waiting for read/write/process tasks to finish");
                 await WaitAll(readTask, processTask, writeTask);
             }
+            _logger?.LogTrace("Exited connection loop");
         }
 
         private async Task WaitAll(params Task[] tasks)
@@ -178,6 +207,8 @@
                 }
                 catch (Exception ex)
                 {
+                    _logger?.LogError(ex, "Exception in a read/write/process task");
+
                     ConnectionException?.Invoke(this, ex);
                 }
             }
@@ -185,6 +216,7 @@
 
         private async Task ReadSocketAsync(Socket socket, PipeWriter writer, CancellationToken disconnectToken)
         {
+            _logger?.LogTrace("Starting ReadSocketAsync loop");
             while (!disconnectToken.IsCancellationRequested)
             {
                 var memory = writer.GetMemory(socket.Available);
@@ -199,10 +231,12 @@
                 var flush = await writer.FlushAsync(disconnectToken);
                 if (flush.IsCompleted || flush.IsCanceled) break;
             }
+            _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
 
         private async Task ProcessMessagesAsync(PipeReader reader, CancellationToken disconnectToken)
         {
+            _logger?.LogTrace("Starting ProcessMessagesAsync loop");
             var parser = new NatsMessageParser(_memoryPool);
             while (!disconnectToken.IsCancellationRequested)
             {
@@ -225,6 +259,8 @@
                                 break;
 
                             case NatsInformation info:
+                                _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", Options.Server, info);
+
                                 ConnectionInformation?.Invoke(this, info);
                                 break;
 
@@ -244,10 +280,13 @@
                     }
                 } while (reader.TryRead(out read));
             }
+            _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
 
         private async Task WriteSocketAsync(Socket socket, CancellationToken disconnectToken)
         {
+            _logger?.LogTrace("Starting WriteSocketAsync loop");
+
             var reader = _senderChannel.Reader;
             var buffer = new byte[1024 * 1024];
             var bufferLength = buffer.Length;
@@ -287,6 +326,8 @@
                 await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
                 Interlocked.Add(ref _transmitBytesTotal, position);
             }
+
+            _logger?.LogTrace("Exited WriteSocketAsync loop");
         }
 
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
@@ -303,6 +344,8 @@
             {
                 foreach (var subscription in _subscriptions)
                 {
+                    _logger?.LogTrace("Resubscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+
                     using var buffer = NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
                     await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
                     Interlocked.Add(ref _transmitBytesTotal, buffer.Memory.Length);
@@ -379,11 +422,15 @@
 
         private ValueTask SendSubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
+            _logger?.LogTrace("Subscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+
             return WriteAsync(NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId), cancellationToken);
         }
 
         private ValueTask SendUnsubscribe(Subscription subscription)
         {
+            _logger?.LogTrace("Unsubscribing from {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+
             return WriteAsync(NatsUnsub.RentedSerialize(_memoryPool, subscription.SubscriptionId, null), CancellationToken.None);
         }
 
@@ -491,7 +538,6 @@
 
             await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
             {
-
                 yield return msg;
             }
         }
@@ -509,75 +555,24 @@
             }
         }
 
-        private async ValueTask<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            // Combine cancellation token with timeout
-            using var timeoutSource = new CancellationTokenSource(timeout ?? Options.RequestTimeout);
-            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
-            var linkedCancellationToken = linkedSource.Token;
-            
-            var replyTo = $"{Options.RequestPrefix}${Interlocked.Increment(ref _nextSubscriptionId)}";
-            var subscription = new Subscription(replyTo, null, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
-
-            await _subscriptionsLock.WaitAsync(linkedCancellationToken);
-            try
-            {
-                _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
-            }
-            finally
-            {
-                _subscriptionsLock.Release();
-            }
-
-            await SendSubscribe(subscription, linkedCancellationToken);
-            await PublishMemoryAsync(subject, request, replyTo, linkedCancellationToken);
-            try
-            {
-                var message = await subscription.Reader.ReadAsync(linkedCancellationToken);
-                try
-                {
-                    return deserialize(message);
-                }
-                catch (Exception e)
-                {
-                    ConnectionException?.Invoke(this, new NatsDeserializeException(message, e));
-                    throw;
-                }
-            }
-            finally
-            {
-                // No cancellation token for the unsubscribe
-                await _subscriptionsLock.WaitAsync(CancellationToken.None);
-                try
-                {
-                    await SendUnsubscribe(subscription);
-                    _subscriptions = _subscriptions.Where(s =>s != subscription).ToArray();
-                }
-                finally
-                {
-                    _subscriptionsLock.Release();
-                }
-            }
+            return _requestResponse.InternalRequest(subject, request.AsMemory(), msg => msg.Payload.ToArray(), timeout, cancellationToken);
         }
 
-        public ValueTask<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<Memory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            return InternalRequest(subject, request.AsMemory(), msg => msg.Payload.ToArray(), timeout, cancellationToken);
+            return _requestResponse.InternalRequest(subject, request, msg => msg.Payload.ToArray().AsMemory(), timeout, cancellationToken);
         }
 
-        public ValueTask<Memory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            return InternalRequest(subject, request, msg => msg.Payload.ToArray().AsMemory(), timeout, cancellationToken);
+            return _requestResponse.InternalRequest(subject, Encoding.UTF8.GetBytes(request), msg => Encoding.UTF8.GetString(msg.Payload.Span), timeout, cancellationToken);
         }
 
-        public ValueTask<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            return InternalRequest(subject, Encoding.UTF8.GetBytes(request), msg => Encoding.UTF8.GetString(msg.Payload.Span), timeout, cancellationToken);
-        }
-
-        public ValueTask<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            return InternalRequest(subject, (serializer ?? Options.Serializer).Serialize(request), msg => (serializer ?? Options.Serializer).Deserialize<TResponse>(msg.Payload), timeout, cancellationToken);
+            return _requestResponse.InternalRequest(subject, (serializer ?? Options.Serializer).Serialize(request), msg => (serializer ?? Options.Serializer).Deserialize<TResponse>(msg.Payload), timeout, cancellationToken);
         }
 
         public TContract GenerateContractClient<TContract>(string? baseSubject = null)

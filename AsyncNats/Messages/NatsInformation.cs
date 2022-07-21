@@ -40,5 +40,10 @@
             // Remove "INFO " and parse remainder as JSON
             return JsonSerializer.Deserialize<NatsInformation>(line.Slice(5));
         }
+
+        public override string ToString()
+        {
+            return JsonSerializer.Serialize(this);
+        }
     }
 }

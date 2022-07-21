@@ -5,6 +5,7 @@
     using System.Reflection;
     using System.Reflection.Emit;
     using System.Threading.Tasks;
+    using Microsoft.Extensions.Logging;
 
     internal static class NatsClientGenerator<TContract>
     {
@@ -26,12 +27,13 @@
 
         private static void CreateConstructor(TypeBuilder typeBuilder)
         {
-            var constructor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, new[] { typeof(INatsConnection), typeof(string) });
+            var constructor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, new[] { typeof(INatsConnection), typeof(string), typeof(ILogger) });
             var il = constructor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            var baseConstuctor = typeof(NatsClientProxy).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(INatsConnection), typeof(string) }, null);
+            il.Emit(OpCodes.Ldarg_3);
+            var baseConstuctor = typeof(NatsClientProxy).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(INatsConnection), typeof(string), typeof(ILogger) }, null);
             il.Emit(OpCodes.Call, baseConstuctor);
             il.Emit(OpCodes.Ret);
         }
@@ -108,7 +110,7 @@
 
         public static TContract GenerateClient(INatsConnection connection, string baseSubject)
         {
-            return (TContract)Activator.CreateInstance(_type, connection, baseSubject);
+            return (TContract)Activator.CreateInstance(_type, connection, baseSubject, connection.Options.LoggerFactory?.CreateLogger($"EightyDecibel.AsyncNats.Rpc.NatsClientProxy<{typeof(TContract).Name}>"));
         }
     }
 }

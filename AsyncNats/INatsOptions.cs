@@ -1,4 +1,6 @@
-﻿namespace EightyDecibel.AsyncNats
+﻿using Microsoft.Extensions.Logging;
+
+namespace EightyDecibel.AsyncNats
 {
     using System;
     using System.Buffers;
@@ -26,5 +28,7 @@
 
         TimeSpan RequestTimeout { get; }
         string RequestPrefix { get; }
+
+        ILoggerFactory? LoggerFactory { get; }
     }
 }
