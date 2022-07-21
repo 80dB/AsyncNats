@@ -1,4 +1,6 @@
 ﻿using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EightyDecibel.AsyncNats
 {
@@ -38,5 +40,7 @@ namespace EightyDecibel.AsyncNats
 
         public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(15);
         public string RequestPrefix { get; set; }
+
+        public ILoggerFactory? LoggerFactory { get; set; }
     }
 }

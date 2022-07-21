@@ -5,6 +5,7 @@
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.Extensions.Logging;
 
     class Program
     {
@@ -15,6 +16,16 @@
                 Serializer = new NatsMessagePackSerializer(),
                 Echo = true, // Without echo this test does not work! On production you might want to keep it disabled
                 RequestTimeout = TimeSpan.FromSeconds(2),
+
+                // Adding logging should only be done in dev-environments
+                LoggerFactory = LoggerFactory.Create(configure =>
+                {
+                    configure.AddSimpleConsole();
+                    configure.SetMinimumLevel(LogLevel.Trace);
+
+                    // Filter out the RPC log lines
+                    configure.AddFilter("EightyDecibel.AsyncNats.Rpc", LogLevel.Error);
+                })
             };
 
             var connection = new NatsConnection(options);

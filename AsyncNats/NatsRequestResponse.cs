@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using EightyDecibel.AsyncNats.Messages;
+using Microsoft.Extensions.Logging;
 
 namespace EightyDecibel.AsyncNats
 {
@@ -10,6 +11,7 @@ namespace EightyDecibel.AsyncNats
     {
         private static long _requestCount;
         
+        private readonly ILogger<NatsRequestResponse>? _logger;
         private readonly string _subject;
         private readonly INatsConnection _connection;
         private readonly object _syncLock = new object();
@@ -21,6 +23,8 @@ namespace EightyDecibel.AsyncNats
         public NatsRequestResponse(INatsConnection connection)
         {
             _connection = connection;
+            _logger = _connection.Options.LoggerFactory?.CreateLogger<NatsRequestResponse>();
+
             _subject = connection.Options.RequestPrefix;
         }
 
@@ -37,6 +41,8 @@ namespace EightyDecibel.AsyncNats
 
         private async Task Listener()
         {
+            _logger?.LogTrace("Starting response listener");
+            
             var cancellationToken = _disposeTokenSource.Token;
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -53,11 +59,15 @@ namespace EightyDecibel.AsyncNats
                 }
                 catch (Exception e)
                 {
+                    _logger?.LogError(e, "Response listener threw an exception");
+
                     (_connection as NatsConnection)?.ServerException(this, null!, e);
                 }
             }
+
+            _logger?.LogTrace("Exited response listener");
         }
-        
+
         internal async Task<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             // First start the listener if it's not listening yet
