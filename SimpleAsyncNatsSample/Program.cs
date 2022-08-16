@@ -4,10 +4,12 @@
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
+    using System.Text;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats;
+    using EightyDecibel.AsyncNats.Messages;
 
     class Program
     {
@@ -114,9 +116,12 @@
 
         static async Task WriterText(NatsConnection connection, CancellationToken cancellationToken)
         {
+            var memory = Encoding.UTF8.GetBytes("HELLO HELLO");
+            var headers = new Dictionary<string, string>() { ["key"] = "value" };
             while (!cancellationToken.IsCancellationRequested)
             {
-                await connection.PublishTextAsync("HELLO", "HELLO WORLD", cancellationToken: cancellationToken);
+
+                await connection.PublishMemoryAsync("HELLO", headers,memory, cancellationToken: cancellationToken);
             }
         }
     }

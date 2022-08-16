@@ -11,29 +11,43 @@
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("INFO "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        [JsonPropertyName("server_id")]
-        public string ServerId { get; set; } = string.Empty;
+        [JsonInclude]
+        [JsonPropertyName("server_id")]        
+        public string ServerId { get; private set; } = string.Empty;
 
+        [JsonInclude]
         [JsonPropertyName("version")]
-        public string Version { get; set; } = string.Empty;
+        public string Version { get; private  set; } = string.Empty;
 
+        [JsonInclude]
         [JsonPropertyName("proto")]
-        public int Protocol { get; set; }
+        public int Protocol { get; private set; }
 
+        [JsonInclude]
+        [JsonPropertyName("headers")]
+        public bool HeadersSupported { get; private set; }
+
+        [JsonInclude]
         [JsonPropertyName("go")]
-        public string GoVersion { get; set; } = string.Empty;
+        public string GoVersion { get; private set; } = string.Empty;
 
+        [JsonInclude]
         [JsonPropertyName("host")]
-        public string Host { get; set; } = string.Empty;
+        public string Host { get; private set; } = string.Empty;
 
+        [JsonInclude]
         [JsonPropertyName("port")]
-        public int Port { get; set; }
+        public int Port { get; private set; }
 
+        [JsonInclude]
         [JsonPropertyName("max_payload")]
-        public int MaxPayload { get; set; }
+        public int MaxPayload { get; private set; }
 
+        [JsonInclude]
         [JsonPropertyName("client_id")]
-        public int ClientId { get; set; }
+        public int ClientId { get; private set; }
+
+        
 
         public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {

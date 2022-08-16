@@ -45,6 +45,9 @@
         [JsonPropertyName("echo")]
         public bool Echo { get; set; }
 
+        [JsonPropertyName("headers")]
+        public bool Headers { get; set; } = true;
+
         public NatsConnect()
         {
             Version = GetType().Assembly.GetName().Version.ToString();
