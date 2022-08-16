@@ -15,6 +15,7 @@
     using Messages;
     using Rpc;
     using Microsoft.Extensions.Logging;
+    using System.Collections.Concurrent;
 
     public class NatsConnection : INatsConnection
     {
@@ -33,10 +34,8 @@
         private readonly NatsRequestResponse _requestResponse;
 
         private readonly NatsMemoryPool _memoryPool;
-        
-        // Assignment of references are atomic
-        // https://stackoverflow.com/questions/2192124/reference-assignment-is-atomic-so-why-is-interlocked-exchangeref-object-object
-        private Subscription[] _subscriptions;
+
+        private ConcurrentDictionary<string, Subscription> _subscriptions = new ConcurrentDictionary<string, Subscription>();
         private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
 
         private class Subscription
@@ -104,7 +103,7 @@
 
             _senderChannel = Channel.CreateBounded<IMemoryOwner<byte>>(options.SenderQueueLength);
             
-            _subscriptions = Array.Empty<Subscription>();
+            
             _subscriptionsLock = new SemaphoreSlim(1, 1);
 
             _disposeTokenSource = new CancellationTokenSource();
@@ -265,16 +264,13 @@
                                 break;
 
                             case NatsMsg msg:
-                                var subscriptions = _subscriptions;
-                                foreach (var subscription in subscriptions)
+                                if(_subscriptions.TryGetValue(msg.SubscriptionId,out var subscription))
                                 {
-                                    if (subscription.SubscriptionId != msg.SubscriptionId) continue;
-
                                     msg.Rent();
                                     if (subscription.Writer.TryWrite(msg)) continue;
                                     await subscription.Writer.WriteAsync(msg, disconnectToken);
+                                    msg.Release();
                                 }
-                                msg.Release();
                                 break;
                         }
                     }
@@ -342,7 +338,7 @@
             await _subscriptionsLock.WaitAsync(disconnectToken);
             try
             {
-                foreach (var subscription in _subscriptions)
+                foreach (var (id,subscription) in _subscriptions)
                 {
                     _logger?.LogTrace("Resubscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
 
@@ -391,7 +387,7 @@
         {
             if (_disposeTokenSource.IsCancellationRequested) return;
 
-            _subscriptions = Array.Empty<Subscription>();
+            _subscriptions.Clear();
 
             await DisconnectAsync();
 
@@ -437,16 +433,8 @@
         private async IAsyncEnumerable<T> InternalSubscribe<T>(string subject, string? queueGroup, Func<NatsMsg, T> deserialize, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var subscription = new Subscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
-            
-            await _subscriptionsLock.WaitAsync(cancellationToken);
-            try
-            {
-                _subscriptions = _subscriptions.Concat(new[] {subscription}).ToArray();
-            }
-            finally
-            {
-                _subscriptionsLock.Release();
-            }
+
+            _subscriptions[subscription.SubscriptionId] = subscription;
 
             await SendSubscribe(subscription, cancellationToken);
             try
@@ -482,7 +470,7 @@
                 try
                 {
                     await SendUnsubscribe(subscription);
-                    _subscriptions = _subscriptions.Where(s =>s != subscription).ToArray();
+                    _subscriptions.TryRemove(subscription.SubscriptionId, out _);
                 }
                 finally
                 {

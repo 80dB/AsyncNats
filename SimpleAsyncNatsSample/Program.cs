@@ -59,8 +59,11 @@
                 }
             }
 
-            var readerTypedTask = Task.Run(() => ReaderText(connection, cancellation.Token));
-            var writerTask = Task.Run(() => WriterText(connection2, cancellation.Token));
+            var readerTypedTask = Task.Run(() => ReaderText(connection,"HELLO",cancellation.Token));
+            foreach(var i in Enumerable.Range(0,1000))
+                _= Task.Run(() => ReaderText(connection, $"HELLO{i}", cancellation.Token));
+
+            var writerTask = Task.Run(() => WriterText(connection2, "HELLO", cancellation.Token));
 
             Console.ReadKey();
 
@@ -89,13 +92,13 @@
             Console.ReadKey();
         }
 
-        static async Task ReaderText(NatsConnection connection, CancellationToken cancellationToken)
+        static async Task ReaderText(NatsConnection connection, string topic, CancellationToken cancellationToken)
         {
             var history = new Queue<(int count, long time)>();
             var counter = 0;
             var prev = 0;
             var watch = Stopwatch.StartNew();
-            await foreach (var message in connection.SubscribeText("HELLO", cancellationToken: cancellationToken))
+            await foreach (var message in connection.SubscribeText(topic, cancellationToken: cancellationToken))
             {
                 counter++;
                 if (counter % 1_000_000 != 0) continue;
@@ -112,11 +115,11 @@
             }
         }
 
-        static async Task WriterText(NatsConnection connection, CancellationToken cancellationToken)
+        static async Task WriterText(NatsConnection connection,string topic, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await connection.PublishTextAsync("HELLO", "HELLO WORLD", cancellationToken: cancellationToken);
+                await connection.PublishTextAsync(topic, "HELLO WORLD", cancellationToken: cancellationToken);
             }
         }
     }
