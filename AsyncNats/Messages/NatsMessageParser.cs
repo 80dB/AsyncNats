@@ -24,12 +24,13 @@
 
         private delegate INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader);
 
+        //leave this list in order of usage frequency so we avoid loop runs when parsing
         private static readonly Tuple<byte[], ParseMessage>[] _messageParsers =
         {
+            new Tuple<byte[], ParseMessage>(_ok, NatsOk.ParseMessage),
             new Tuple<byte[], ParseMessage>(_message, NatsMsg.ParseMessage),
             new Tuple<byte[], ParseMessage>(_ping, NatsPing.ParseMessage),
             new Tuple<byte[], ParseMessage>(_pong, NatsPong.ParseMessage),
-            new Tuple<byte[], ParseMessage>(_ok, NatsOk.ParseMessage),
             new Tuple<byte[], ParseMessage>(_error, NatsError.ParseMessage),
             new Tuple<byte[], ParseMessage>(_information, NatsInformation.ParseMessage)
         };
@@ -49,11 +50,13 @@
                 // ReSharper disable once ForCanBeConvertedToForeach
                 for (var i = 0; i < _messageParsers.Length; i++)
                 {
-                    if (!line.StartsWith(_messageParsers[i].Item1)) continue;
-                    parseMessage = _messageParsers[i].Item2;
-                    break;
+                    if (line.StartsWith(_messageParsers[i].Item1))
+                    {
+                        parseMessage = _messageParsers[i].Item2;
+                        break;
+                    }
                 }
-
+                
                 if (parseMessage == null) throw new ProtocolViolationException($"Unknown message {Encoding.UTF8.GetString(line)}");
                 var message = parseMessage(_memoryPool, line, ref reader);
                 if (message == null)

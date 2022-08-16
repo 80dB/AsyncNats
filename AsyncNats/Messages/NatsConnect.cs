@@ -62,7 +62,7 @@
             Echo = options.Echo;
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool, NatsConnect msg)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsConnect msg)
         {
             var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions {IgnoreNullValues = true});
             var hint = _command.Length +

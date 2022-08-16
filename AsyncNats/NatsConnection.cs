@@ -15,6 +15,7 @@
     using Messages;
     using Rpc;
     using Microsoft.Extensions.Logging;
+    using System.Runtime.InteropServices;
 
     public class NatsConnection : INatsConnection
     {
@@ -26,6 +27,8 @@
         private long _receiverQueueSize;
         private long _transmitBytesTotal;
         private long _receivedBytesTotal;
+        private long _transmitMessagesTotal;
+        private long _receivedMessagesTotal;
 
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
@@ -51,7 +54,11 @@
                 QueueGroup = queueGroup;
                 SubscriptionId = subscriptionId.ToString();
 
-                _channel = Channel.CreateBounded<NatsMsg>(queueLength);
+                _channel = Channel.CreateBounded<NatsMsg>(
+                    new BoundedChannelOptions(queueLength) { 
+                        SingleReader=true,
+                        SingleWriter=true
+                    });
 
                 Writer = _channel.Writer;
                 Reader = _channel.Reader;
@@ -90,6 +97,8 @@
         public long ReceiverQueueSize => _receiverQueueSize;
         public long TransmitBytesTotal => _transmitBytesTotal;
         public long ReceivedBytesTotal => _receivedBytesTotal;
+        public long TransmitMessagesTotal => _transmitMessagesTotal;
+        public long ReceivedMessagesTotal => _receivedMessagesTotal;
 
         public NatsConnection()
             : this(new NatsDefaultOptions())
@@ -102,7 +111,10 @@
 
             _memoryPool = new NatsMemoryPool(options.ArrayPool);
 
-            _senderChannel = Channel.CreateBounded<IMemoryOwner<byte>>(options.SenderQueueLength);
+            _senderChannel = Channel.CreateBounded<IMemoryOwner<byte>>(
+                new BoundedChannelOptions(options.SenderQueueLength) { 
+                    SingleReader = false
+                }) ;
             
             _subscriptions = Array.Empty<Subscription>();
             _subscriptionsLock = new SemaphoreSlim(1, 1);
@@ -143,7 +155,7 @@
                 Status = NatsStatus.Connecting;
 
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-                socket.NoDelay = true;
+                socket.NoDelay = true;                
 
                 using var internalDisconnect = new CancellationTokenSource();
 
@@ -248,10 +260,12 @@
                     reader.AdvanceTo(read.Buffer.GetPosition(consumed));
                     if (consumed == 0) break;
 
-                    Interlocked.Add(ref _receiverQueueSize, (int)-consumed);
+                    Interlocked.Add(ref _receiverQueueSize, (long)-consumed);
 
                     foreach (var message in messages)
                     {
+                        Interlocked.Increment(ref _receivedMessagesTotal);
+
                         switch (message)
                         {
                             case NatsPing _:
@@ -283,6 +297,7 @@
             _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
 
+
         private async Task WriteSocketAsync(Socket socket, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting WriteSocketAsync loop");
@@ -297,6 +312,7 @@
             {
                 var position = 0;
                 var result = await reader.ReadAsync(disconnectToken);
+                
                 do
                 {
                     var consumed = result.Memory.Length;
@@ -305,12 +321,14 @@
                     if (position + consumed > bufferLength && position > 0)
                     {
                         await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
+                        Interlocked.Add(ref _transmitBytesTotal, position);
                         position = 0;
                     }
 
                     if (consumed > bufferLength)
                     {
                         await socket.SendAsync(result.Memory, SocketFlags.None, disconnectToken);
+                        Interlocked.Add(ref _transmitBytesTotal, result.Memory.Length);
                     }
                     else
                     {
@@ -319,6 +337,9 @@
                     }
 
                     result.Dispose();
+
+                    Interlocked.Increment(ref _transmitMessagesTotal);
+                    
                 } while (reader.TryRead(out result));
 
                 if (position == 0) continue;
@@ -434,7 +455,7 @@
             return WriteAsync(NatsUnsub.RentedSerialize(_memoryPool, subscription.SubscriptionId, null), CancellationToken.None);
         }
 
-        private async IAsyncEnumerable<T> InternalSubscribe<T>(string subject, string? queueGroup, Func<NatsMsg, T> deserialize, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        private async IAsyncEnumerable<NatsMsg> InternalSubscribe(string subject, string? queueGroup, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var subscription = new Subscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
             
@@ -456,22 +477,8 @@
                     var message = await subscription.Reader.ReadAsync(cancellationToken);
                     do
                     {
-                        T msg;
-                        try
-                        {
-                            msg = deserialize(message);
-                        }
-                        catch (Exception e)
-                        {
-                            ConnectionException?.Invoke(this, new NatsDeserializeException(message, e));
-                            throw;
-                        }
-                        finally
-                        {
-                            message.Release();
-                        }
-
-                        yield return msg;
+                        yield return message;
+                        
                     } while (!cancellationToken.IsCancellationRequested && subscription.Reader.TryRead(out message));
                 }
             }
@@ -490,6 +497,25 @@
                 }
             }
         }
+        private T DeserializeWrapper<T>(Func<NatsMsg, T> deserialize, NatsMsg message)
+        {
+            T msg;
+            try
+            {
+                msg = deserialize(message);
+            }
+            catch (Exception e)
+            {
+                ConnectionException?.Invoke(this, new NatsDeserializeException(message, e));
+                throw;
+            }
+            finally
+            {
+                message.Release();
+            }
+
+            return msg;
+        }
 
         public async IAsyncEnumerable<NatsMsg> Subscribe(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -504,11 +530,24 @@
                 };
             }
 
-            await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
+            await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
-                yield return msg;
+                yield return DeserializeWrapper(Deserialize, msg);
             }
         }
+
+        /// <summary>
+        /// Warning, you are responsible for disposing the returned <see cref="NatsMsg"/>
+        /// </summary>
+        /// <param name="subject"></param>
+        /// <param name="queueGroup"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
+        {
+            return InternalSubscribe(subject, queueGroup, cancellationToken);
+        }
+
 
         public async IAsyncEnumerable<string> SubscribeText(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -517,16 +556,17 @@
                 return Encoding.UTF8.GetString(msg.Payload.Span);
             }
 
-            await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
+            await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
-                yield return msg;
+                yield return DeserializeWrapper(Deserialize, msg);
             }
         }
 
+                       
         public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             NatsTypedMsg<T> Deserialize(NatsMsg msg)
-            {
+            {                
                 return new NatsTypedMsg<T>
                 {
                     Subject = msg.Subject,
@@ -534,11 +574,12 @@
                     SubscriptionId = msg.SubscriptionId,
                     Payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload)
                 };
+
             }
 
-            await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
+            await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
-                yield return msg;
+                yield return DeserializeWrapper(Deserialize, msg);
             }
         }
 
@@ -549,9 +590,9 @@
                 return (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload);
             }
 
-            await foreach (var msg in InternalSubscribe(subject, queueGroup, Deserialize, cancellationToken))
+            await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
-                yield return msg;
+                yield return DeserializeWrapper(Deserialize, msg);
             }
         }
 

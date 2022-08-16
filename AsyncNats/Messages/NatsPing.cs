@@ -8,11 +8,11 @@
 
     public class NatsPing : INatsServerMessage, INatsClientMessage
     {
-        private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("PING\r\n"));
+        private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PING\r\n"));
 
         public async ValueTask Serialize(PipeWriter writer)
         {
-            await writer.WriteAsync(_command);
+            await writer.WriteAsync(_command.Memory);
         }
 
         public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
@@ -22,9 +22,7 @@
 
         public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool)
         {
-            var buffer = pool.Rent(_command.Length);
-            _command.CopyTo(buffer.Memory);
-            return buffer;
+            return _command; 
         }
     }
 }

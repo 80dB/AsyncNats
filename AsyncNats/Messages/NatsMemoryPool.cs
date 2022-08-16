@@ -3,13 +3,26 @@
     using System;
     using System.Buffers;
 
-    public sealed class NatsMemoryPool : MemoryPool<byte>
+    
+
+    public sealed class NatsMemoryPool 
     {
-        private class NatsMemoryOwner : IMemoryOwner<byte>
+        private readonly ArrayPool<byte> _pool;
+
+        public NatsMemoryPool(ArrayPool<byte>? pool = null)
+        {
+            _pool = pool ?? ArrayPool<byte>.Create(1024 * 1024, 256);
+        }
+
+        public NatsMemoryOwner Rent(int minBufferSize = -1) => new NatsMemoryOwner(this, minBufferSize);
+
+        public int MaxBufferSize => 1024 * 1024;
+
+        public readonly struct NatsMemoryOwner : IMemoryOwner<byte>
         {
             private readonly NatsMemoryPool _owner;
-            private readonly byte[] _buffer;
 
+            private readonly byte[] _buffer;
             public NatsMemoryOwner(NatsMemoryPool owner, int length)
             {
                 _owner = owner;
@@ -22,17 +35,28 @@
             public void Dispose() => _owner._pool.Return(_buffer);
         }
 
-        private ArrayPool<byte> _pool;
+        
+    }
 
-        public NatsMemoryPool(ArrayPool<byte>? pool = null)
+    /// <summary>
+    /// A simple struct implementation of IMemoryOwner<typeparamref name="T"/> that does not return to a pool
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public readonly struct NoOwner<T> : IMemoryOwner<T>
+    {
+        public Memory<T> Memory => _memory;
+        
+        
+        readonly Memory<T> _memory;
+
+        public NoOwner(Memory<T> memory)
         {
-            _pool = pool ?? ArrayPool<byte>.Create(1024 * 1024, 256);
+            _memory = memory;
         }
 
-        protected override void Dispose(bool disposing)
-        { }
-
-        public override IMemoryOwner<byte> Rent(int minBufferSize = -1) => new NatsMemoryOwner(this, minBufferSize);
-        public override int MaxBufferSize => 1024 * 1024;
+        public void Dispose()
+        {
+            //this is safe because structs are not passed by reference
+        }
     }
 }

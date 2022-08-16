@@ -60,6 +60,7 @@
                 Console.Write($"\rMessages processed {_timings.Count} ({_timings.Count / ((Stopwatch.GetTimestamp() - _started) / frequency):N2} messages/sec)  {readerConnection.ReceiverQueueSize}           ");
                 await Task.Delay(1000, cancellation.Token);
             }
+            Console.ReadKey();
 
             cancellation.Cancel();
 
@@ -92,6 +93,8 @@
             Console.WriteLine($"99.999: {_timings[(int)(_timings.Count * 0.99999)] / ms:N2}ms");
             Console.WriteLine($"99.9999: {_timings[(int)(_timings.Count * 0.999999)] / ms:N2}ms");
             Console.WriteLine($"99.99999: {_timings[(int)(_timings.Count * 0.9999999)] / ms:N2}ms");
+
+            Console.ReadKey();
         }
 
         static async Task Reader(NatsConnection connection, CancellationToken cancellationToken)

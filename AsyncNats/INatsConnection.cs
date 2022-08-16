@@ -19,6 +19,8 @@
         long ReceiverQueueSize { get; }
         long TransmitBytesTotal { get; }
         long ReceivedBytesTotal { get; }
+        long TransmitMessagesTotal { get; }
+        long ReceivedMessagesTotal { get; }
 
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
