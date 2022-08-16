@@ -17,6 +17,7 @@
 
         private static readonly byte[] _information = Encoding.UTF8.GetBytes("INFO ");
         private static readonly byte[] _message = Encoding.UTF8.GetBytes("MSG ");
+        private static readonly byte[] _messageWithHeader = Encoding.UTF8.GetBytes("HMSG ");
         private static readonly byte[] _ok = Encoding.UTF8.GetBytes("+OK");
         private static readonly byte[] _error = Encoding.UTF8.GetBytes("-ERR");
         private static readonly byte[] _ping = Encoding.UTF8.GetBytes("PING");
@@ -29,6 +30,7 @@
         {
             new Tuple<byte[], ParseMessage>(_ok, NatsOk.ParseMessage),
             new Tuple<byte[], ParseMessage>(_message, NatsMsg.ParseMessage),
+            new Tuple<byte[], ParseMessage>(_messageWithHeader, NatsMsg.ParseMessageWithHeader),
             new Tuple<byte[], ParseMessage>(_ping, NatsPing.ParseMessage),
             new Tuple<byte[], ParseMessage>(_pong, NatsPong.ParseMessage),
             new Tuple<byte[], ParseMessage>(_error, NatsError.ParseMessage),

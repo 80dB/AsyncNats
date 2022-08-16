@@ -20,6 +20,9 @@
 
     public class NatsConnection : INatsConnection
     {
+        public NatsInformation NatsInformation { get; private set; }
+
+
         private static long _nextSubscriptionId = 1;
 
         private ILogger<NatsConnection>? _logger;
@@ -35,11 +38,8 @@
         private CancellationTokenSource? _disconnectSource;
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
-
         private readonly NatsMemoryPool _memoryPool;
-
         private ConcurrentDictionary<Utf8String, Subscription> _subscriptions = new ConcurrentDictionary<Utf8String, Subscription>();
-        private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
 
         private class Subscription
         {
@@ -274,6 +274,7 @@
                             case NatsInformation info:
                                 _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", Options.Server, info);
 
+                                NatsInformation = info;
                                 ConnectionInformation?.Invoke(this, info);
                                 break;
 
@@ -438,6 +439,19 @@
             var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo, payload);
             await WriteAsync(pub, cancellationToken);
         }
+
+        public async ValueTask PublishMemoryAsync(string subject, NatsMsgHeadersPublish headers, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default)
+        {        
+            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo,headers, payload);
+            await WriteAsync(pub, cancellationToken);
+        }
+
+        public async ValueTask PublishMemoryAsync(string subject, NatsMsgHeadersPublish headers, string? replyTo = null, CancellationToken cancellationToken = default)
+        {            
+            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo, headers, ReadOnlyMemory<byte>.Empty);
+            await WriteAsync(pub, cancellationToken);
+        }
+
 
         private ValueTask SendSubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
