@@ -51,7 +51,7 @@
             public Subscription(string subject, string? queueGroup, long subscriptionId, int queueLength)
             {
                 Subject = subject;
-                QueueGroup = queueGroup;
+                QueueGroup = queueGroup ?? "";
                 SubscriptionId = subscriptionId.ToString();
 
                 _channel = Channel.CreateBounded<NatsMsg>(
@@ -64,9 +64,9 @@
                 Reader = _channel.Reader;
             }
 
-            public string Subject { get; }
-            public string? QueueGroup { get; }
-            public string SubscriptionId { get; }
+            public Utf8String Subject { get; }
+            public Utf8String QueueGroup { get; }
+            public Utf8String SubscriptionId { get; }
             
             public ChannelWriter<NatsMsg> Writer { get; }
             public ChannelReader<NatsMsg> Reader { get; }
@@ -282,7 +282,7 @@
                                 var subscriptions = _subscriptions;
                                 foreach (var subscription in subscriptions)
                                 {
-                                    if (subscription.SubscriptionId != msg.SubscriptionId) continue;
+                                    if (!subscription.SubscriptionId.Equals(msg.SubscriptionId.Memory.Span)) continue;
 
                                     msg.Rent();
                                     if (subscription.Writer.TryWrite(msg)) continue;
@@ -303,7 +303,7 @@
             _logger?.LogTrace("Starting WriteSocketAsync loop");
 
             var reader = _senderChannel.Reader;
-            var buffer = new byte[1024 * 1024];
+            var buffer = new byte[socket.SendBufferSize];
             var bufferLength = buffer.Length;
 
             await SendConnect(socket, disconnectToken);
@@ -315,6 +315,7 @@
                 
                 do
                 {
+                   
                     var consumed = result.Memory.Length;
                     Interlocked.Add(ref _senderQueueSize, -consumed);
 
@@ -521,13 +522,7 @@
         {
             static NatsMsg Deserialize(NatsMsg msg)
             {
-                return new NatsMsg
-                {
-                    Subject = msg.Subject,
-                    ReplyTo = msg.ReplyTo,
-                    Payload = msg.Payload.ToArray(),
-                    SubscriptionId = msg.SubscriptionId
-                };
+                return new NatsMsg(msg.Subject, msg.SubscriptionId, msg.ReplyTo, msg.Payload.ToArray());
             }
 
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
@@ -563,18 +558,17 @@
         }
 
                        
-        public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup=null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             NatsTypedMsg<T> Deserialize(NatsMsg msg)
             {                
                 return new NatsTypedMsg<T>
                 {
-                    Subject = msg.Subject,
-                    ReplyTo = msg.ReplyTo,
-                    SubscriptionId = msg.SubscriptionId,
+                    Subject = msg.Subject.AsString(),
+                    ReplyTo = msg.ReplyTo.AsString(),
+                    SubscriptionId = msg.SubscriptionId.AsString(),
                     Payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload)
                 };
-
             }
 
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))

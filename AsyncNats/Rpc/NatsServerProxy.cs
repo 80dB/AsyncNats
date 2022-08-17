@@ -64,7 +64,7 @@ namespace EightyDecibel.AsyncNats.Rpc
                 msg.Rent();
                 try
                 {
-                    var method = msg.Subject.Substring((_subject ?? string.Empty).Length - 1);
+                    var method = msg.Subject.AsString().Substring((_subject ?? string.Empty).Length - 1);
                     if (_asyncMethods.TryGetValue(method, out var delegates))
                     {
                         if (taskFactory == null) await InvokeAsync(method, delegates.invoke, delegates.serialize, msg, cancellationToken);
@@ -103,20 +103,20 @@ namespace EightyDecibel.AsyncNats.Rpc
             try
             {
                 var response = invoke(msg.Payload);
-                if (!string.IsNullOrEmpty(msg.ReplyTo))
-                    await _parent.PublishAsync(msg.ReplyTo, response, cancellationToken: cancellationToken);
+                if (!string.IsNullOrEmpty(msg.ReplyTo.AsString()))
+                    await _parent.PublishAsync(msg.ReplyTo.AsString(), response, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "{Method} threw an exception", method);
 
-                if (!string.IsNullOrEmpty(msg.ReplyTo))
+                if (!string.IsNullOrEmpty(msg.ReplyTo.AsString()))
                 {
                     await using var ms = new MemoryStream();
                     var formatter = new BinaryFormatter();
                     formatter.Serialize(ms, ex);
 
-                    await _parent.PublishObjectAsync(msg.ReplyTo, new NatsServerResponse {E = ms.ToArray()}, cancellationToken: cancellationToken);
+                    await _parent.PublishObjectAsync(msg.ReplyTo.AsString(), new NatsServerResponse {E = ms.ToArray()}, cancellationToken: cancellationToken);
                 }
 
                 _parent.ServerException(this, msg, ex);
@@ -135,20 +135,20 @@ namespace EightyDecibel.AsyncNats.Rpc
                 var task = invoke(msg.Payload);
                 await task;
                 var response = serialize(task);
-                if (!string.IsNullOrEmpty(msg.ReplyTo))
-                    await _parent.PublishAsync(msg.ReplyTo, response, cancellationToken: cancellationToken);
+                if (!string.IsNullOrEmpty(msg.ReplyTo.AsString()))
+                    await _parent.PublishAsync(msg.ReplyTo.AsString(), response, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "{Method} threw an exception", method);
 
-                if (!string.IsNullOrEmpty(msg.ReplyTo))
+                if (!string.IsNullOrEmpty(msg.ReplyTo.AsString()))
                 {
                     await using var ms = new MemoryStream();
                     var formatter = new BinaryFormatter();
                     formatter.Serialize(ms, ex);
 
-                    await _parent.PublishObjectAsync(msg.ReplyTo, new NatsServerResponse { E = ms.ToArray() }, cancellationToken: cancellationToken);
+                    await _parent.PublishObjectAsync(msg.ReplyTo.AsString(), new NatsServerResponse { E = ms.ToArray() }, cancellationToken: cancellationToken);
                 }
 
                 _parent.ServerException(this, msg, ex);

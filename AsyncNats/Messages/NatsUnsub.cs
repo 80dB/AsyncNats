@@ -6,6 +6,7 @@
     using System.IO.Pipelines;
     using System.Text;
     using System.Threading.Tasks;
+    using System.Xml.Linq;
 
     public class NatsUnsub : INatsClientMessage
     {
@@ -21,10 +22,10 @@
             await writer.WriteAsync(Encoding.UTF8.GetBytes($"UNSUB {SubscriptionId} {MaxMessages}\r\n"));
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subscriptionId, int? maxMessages)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, Utf8String subscriptionId, int? maxMessages)
         {
             var hint = _command.Length;
-            hint += subscriptionId.Length;
+            hint += subscriptionId.Memory.Length;
             if (maxMessages != null)
             {
                 if (maxMessages < 10) hint += 1;
@@ -44,7 +45,9 @@
             var buffer = rented.Memory;
             _command.CopyTo(buffer);
             var consumed = _command.Length;
-            consumed += Encoding.UTF8.GetBytes(subscriptionId, buffer.Slice(consumed).Span);
+
+            subscriptionId.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subscriptionId.Memory.Length;
             if (maxMessages != null)
             {
                 _del.CopyTo(buffer.Slice(consumed));

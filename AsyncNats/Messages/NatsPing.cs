@@ -20,7 +20,7 @@
             return new NatsPing();
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)
         {
             return _command; 
         }

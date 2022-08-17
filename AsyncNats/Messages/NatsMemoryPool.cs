@@ -2,8 +2,8 @@
 {
     using System;
     using System.Buffers;
-
-    
+    using System.Runtime.CompilerServices;
+    using System.Text;
 
     public sealed class NatsMemoryPool 
     {
@@ -58,5 +58,57 @@
         {
             //this is safe because structs are not passed by reference
         }
+    }
+
+    public readonly struct Utf8String:IEquatable<Utf8String>,IEquatable<string>
+    {
+        public static Utf8String Empty = new Utf8String(string.Empty);
+        public bool IsEmpty => Memory.Length == 0;
+
+        public readonly ReadOnlyMemory<byte> Memory;
+        private readonly string _string;
+
+        public Utf8String(ReadOnlyMemory<byte> value,bool convert=true)
+        {
+            Memory = value;
+            _string = convert ? Encoding.UTF8.GetString(value.Span) : string.Empty;
+
+        }
+
+        public Utf8String(string value)
+        {
+            _string = value ?? string.Empty;
+            Memory = (_string == string.Empty) ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value);
+        }
+
+        public string AsString()
+        {
+            return _string.Length>0 ? _string : Memory.Span.Length==0 ? string.Empty : Encoding.UTF8.GetString(Memory.Span);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(in Utf8String other)
+        {
+            return other.Memory.Span.SequenceEqual(this.Memory.Span);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(in ReadOnlySpan<byte> other)
+        {
+            return other.SequenceEqual(this.Memory.Span);
+        }
+
+        public bool Equals(Utf8String other)
+        {
+            return Equals(in other);
+        }
+
+        public bool Equals(string other)
+        {
+            return this.AsString() == other;
+        }
+
+        public static implicit operator Utf8String(string value) => new Utf8String(value);
+        
     }
 }
