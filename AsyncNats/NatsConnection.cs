@@ -38,7 +38,7 @@
 
         private readonly NatsMemoryPool _memoryPool;
 
-        private ConcurrentDictionary<string, Subscription> _subscriptions = new ConcurrentDictionary<string, Subscription>();
+        private ConcurrentDictionary<Utf8String, Subscription> _subscriptions = new ConcurrentDictionary<Utf8String, Subscription>();
         private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
 
         private class Subscription

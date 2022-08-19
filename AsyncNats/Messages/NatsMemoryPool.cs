@@ -68,17 +68,20 @@
         public readonly ReadOnlyMemory<byte> Memory;
         private readonly string _string;
 
+        private readonly int _hashCode;
+
         public Utf8String(ReadOnlyMemory<byte> value,bool convert=true)
         {
             Memory = value;
             _string = convert ? Encoding.UTF8.GetString(value.Span) : string.Empty;
-
+            _hashCode = Utf8String.ComputeHashCode(Memory.Span);
         }
 
         public Utf8String(string value)
         {
-            _string = value ?? string.Empty;
-            Memory = (_string == string.Empty) ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value);
+            _string = value ?? string.Empty;           
+            Memory = (_string == string.Empty) ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value); 
+            _hashCode = Utf8String.ComputeHashCode(Memory.Span);
         }
 
         public string AsString()
@@ -106,6 +109,20 @@
         public bool Equals(string other)
         {
             return this.AsString() == other;
+        }
+
+        public override int GetHashCode()
+        {
+            return _hashCode;
+        }
+
+        private static int ComputeHashCode(ReadOnlySpan<byte> span)
+        {
+            var hash = new HashCode();
+            for (var i = span.Length - 1; i >= 0; i--)
+                hash.Add(span[i]);
+
+            return hash.ToHashCode();
         }
 
         public static implicit operator Utf8String(string value) => new Utf8String(value);
