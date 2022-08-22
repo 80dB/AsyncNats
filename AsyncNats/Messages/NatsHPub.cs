@@ -13,13 +13,13 @@
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subject, string? replyTo, NatsMsgHeadersPublish header, ReadOnlyMemory<byte> payload)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, in NatsKey subject, in NatsKey replyTo, in NatsMsgHeaders header, in NatsPayload payload)
         {
-            var totalLength = payload.Length + header.SerializedLength;
+            var totalLength = payload.Memory.Length + header.SerializedLength;
             
             var hint = _command.Length; // HPUB
-            hint += subject.Length + 2; // Subject + spaces
-            hint += replyTo?.Length + 1 ?? 0; // ReplyTo
+            hint += subject.Memory.Length + 2; // Subject + spaces
+            hint += replyTo.IsEmpty ? 0 : replyTo.Memory.Length + 1; // ReplyTo
             
             if (header.SerializedLength < 10) hint += 1;
             else if (header.SerializedLength < 100) hint += 2;
@@ -42,7 +42,7 @@
             
 
             hint += _end.Length; // Ending
-            hint += payload.Length;
+            hint += payload.Memory.Length;
             hint += header.SerializedLength;
             hint += _end.Length; // Ending Payload
 
@@ -51,22 +51,24 @@
 
             _command.CopyTo(buffer);
             var consumed = _command.Length;
-            consumed += Encoding.ASCII.GetBytes(subject, buffer.Slice(consumed).Span);
+            subject.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subject.Memory.Length;
             _del.CopyTo(buffer.Slice(consumed));
             consumed++;
-            if (!string.IsNullOrEmpty(replyTo))
+            if (!replyTo.IsEmpty)
             {
-                consumed += Encoding.UTF8.GetBytes(replyTo, buffer.Slice(consumed).Span);
+                replyTo.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
+                consumed += replyTo.Memory.Length;
                 _del.CopyTo(buffer.Slice(consumed));
                 consumed++;
             }
-            
+
             Utf8Formatter.TryFormat(header.SerializedLength, buffer.Slice(consumed).Span, out var written);
             consumed += written;
             _del.CopyTo(buffer.Slice(consumed));
             consumed++;
 
-            Utf8Formatter.TryFormat(payload.Length + header.SerializedLength, buffer.Slice(consumed).Span, out written);            
+            Utf8Formatter.TryFormat(payload.Memory.Length + header.SerializedLength, buffer.Slice(consumed).Span, out written);            
             consumed += written;
             _end.CopyTo(buffer.Slice(consumed));
             consumed += _end.Length;
@@ -76,8 +78,8 @@
 
             if (!payload.IsEmpty)
             {
-                payload.CopyTo(buffer.Slice(consumed));
-                consumed += payload.Length;
+                payload.Memory.CopyTo(buffer.Slice(consumed));
+                consumed += payload.Memory.Length;
             }
 
             _end.CopyTo(buffer.Slice(consumed));

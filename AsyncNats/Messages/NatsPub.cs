@@ -11,22 +11,22 @@
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subject, string? replyTo, ReadOnlyMemory<byte> payload)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, in NatsKey subject, in NatsKey replyTo, in NatsPayload payload)
         {
             var hint = _command.Length; // PUB
-            hint += subject.Length + 1; // Subject + space
-            hint += replyTo?.Length + 1 ?? 0; // ReplyTo
-            if (payload.Length < 10) hint += 1;
-            else if (payload.Length < 100) hint += 2;
-            else if (payload.Length < 1_000) hint += 3;
-            else if (payload.Length < 10_000) hint += 4;
-            else if (payload.Length < 100_000) hint += 5;
-            else if (payload.Length < 1_000_000) hint += 6;
-            else if (payload.Length < 10_000_000) hint += 7;
+            hint += subject.Memory.Length + 1; // Subject + space
+            hint += replyTo.IsEmpty ? 0 : replyTo.Memory.Length + 1; // ReplyTo
+            if (payload.Memory.Length < 10) hint += 1;
+            else if (payload.Memory.Length < 100) hint += 2;
+            else if (payload.Memory.Length < 1_000) hint += 3;
+            else if (payload.Memory.Length < 10_000) hint += 4;
+            else if (payload.Memory.Length < 100_000) hint += 5;
+            else if (payload.Memory.Length < 1_000_000) hint += 6;
+            else if (payload.Memory.Length < 10_000_000) hint += 7;
             else throw new ArgumentOutOfRangeException(nameof(payload));
 
             hint += _end.Length; // Ending
-            hint += payload.Length;
+            hint += payload.Memory.Length;
             hint += _end.Length; // Ending Payload
 
             var rented = pool.Rent(hint);
@@ -34,24 +34,26 @@
 
             _command.CopyTo(buffer);
             var consumed = _command.Length;
-            consumed += Encoding.ASCII.GetBytes(subject, buffer.Slice(consumed).Span);
+            subject.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subject.Memory.Length;
             _del.CopyTo(buffer.Slice(consumed));
             consumed++;
-            if (!string.IsNullOrEmpty(replyTo))
+            if (!replyTo.IsEmpty)
             {
-                consumed += Encoding.UTF8.GetBytes(replyTo, buffer.Slice(consumed).Span);
+                replyTo.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
+                consumed += replyTo.Memory.Length;
                 _del.CopyTo(buffer.Slice(consumed));
                 consumed++;
             }
 
-            Utf8Formatter.TryFormat(payload.Length, buffer.Slice(consumed).Span, out var written);
+            Utf8Formatter.TryFormat(payload.Memory.Length, buffer.Slice(consumed).Span, out var written);
             consumed += written;
             _end.CopyTo(buffer.Slice(consumed));
             consumed += _end.Length;
             if (!payload.IsEmpty)
             {
-                payload.CopyTo(buffer.Slice(consumed));
-                consumed += payload.Length;
+                payload.Memory.CopyTo(buffer.Slice(consumed));
+                consumed += payload.Memory.Length;
             }
 
             _end.CopyTo(buffer.Slice(consumed));

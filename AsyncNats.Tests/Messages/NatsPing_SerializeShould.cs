@@ -3,6 +3,7 @@
     using System;
     using System.Buffers;
     using System.Text;
+    using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 

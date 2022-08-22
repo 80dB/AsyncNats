@@ -3,6 +3,7 @@
     using System;
     using System.Buffers;
     using System.Text;
+    using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 
@@ -13,7 +14,7 @@
         [Fact]
         public void BeSameWithoutMaxMessages()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), "1", null);
+            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, null);
             var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             Assert.Equal("UNSUB 1\r\n", text);
@@ -22,7 +23,7 @@
         [Fact]
         public void BeSameWitMaxMessages()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), "1", 5);
+            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, 5);
             var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             Assert.Equal("UNSUB 1 5\r\n", text);
@@ -31,7 +32,7 @@
         [Fact]
         public void BeSameWitMaxMessages999()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), "1", 999);
+            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, 999);
             var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             Assert.Equal("UNSUB 1 999\r\n", text);

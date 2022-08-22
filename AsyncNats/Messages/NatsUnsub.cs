@@ -22,10 +22,12 @@
             await writer.WriteAsync(Encoding.UTF8.GetBytes($"UNSUB {SubscriptionId} {MaxMessages}\r\n"));
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, Utf8String subscriptionId, int? maxMessages)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, long subscriptionId, int? maxMessages)
         {
+            byte[] subscriptionBytes = Encoding.UTF8.GetBytes(subscriptionId.ToString());
+
             var hint = _command.Length;
-            hint += subscriptionId.Memory.Length;
+            hint += subscriptionBytes.Length;
             if (maxMessages != null)
             {
                 if (maxMessages < 10) hint += 1;
@@ -46,8 +48,8 @@
             _command.CopyTo(buffer);
             var consumed = _command.Length;
 
-            subscriptionId.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
-            consumed += subscriptionId.Memory.Length;
+            subscriptionBytes.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subscriptionBytes.Length;
             if (maxMessages != null)
             {
                 _del.CopyTo(buffer.Slice(consumed));

@@ -37,11 +37,12 @@
             new Tuple<byte[], ParseMessage>(_information, NatsInformation.ParseMessage)
         };
 
-        public List<INatsServerMessage> ParseMessages(in ReadOnlySequence<byte> buffer, out long consumed)
+        
+        public int ParseMessages(in ReadOnlySequence<byte> buffer, Span<INatsServerMessage> outMessages, out long consumed)
         {
-            var messages = new List<INatsServerMessage>();
+            var messageCount = 0;
             var reader = new SequenceReader<byte>(buffer);
-            while (true)
+            while (messageCount<outMessages.Length)
             {
                 var previousPosition = reader.Consumed;
                 if (!reader.TryReadTo(out ReadOnlySpan<byte> line, (byte) '\n')) break;
@@ -68,11 +69,13 @@
                     break;
                 }
 
-                messages.Add(message);
+                outMessages[messageCount] = message;
+                messageCount++;
+               
             }
 
             consumed = reader.Consumed;
-            return messages;
+            return messageCount;
         }
     }
 }

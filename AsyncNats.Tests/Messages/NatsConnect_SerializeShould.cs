@@ -4,6 +4,7 @@
     using System.Buffers;
     using System.Text;
     using System.Text.Json;
+    using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 

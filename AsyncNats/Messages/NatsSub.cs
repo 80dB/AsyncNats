@@ -21,12 +21,14 @@
             await writer.WriteAsync(Encoding.UTF8.GetBytes($"SUB {Subject} {(string.IsNullOrEmpty(QueueGroup) ? "" : $"{QueueGroup} ")}{SubscriptionId}\r\n"));
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, Utf8String subject, Utf8String queueGroup, Utf8String subscriptionId)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsKey subject, NatsKey queueGroup, long subscriptionId)
         {
+            byte[] subscriptionBytes = Encoding.UTF8.GetBytes(subscriptionId.ToString());
+
             var length = _command.Length;
             length += subject.Memory.Length + 1;
             length += queueGroup.Memory.Length>0? queueGroup.Memory.Length+1:0;
-            length += subscriptionId.Memory.Length;
+            length += subscriptionBytes.Length;
             length += _end.Length;
 
             var rented = pool.Rent(length);
@@ -43,14 +45,15 @@
             if (!queueGroup.IsEmpty)
             {
                 queueGroup.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
-                consumed += subscriptionId.Memory.Length;                                
+                consumed += queueGroup.Memory.Length;                                
                 _del.CopyTo(buffer.Slice(consumed));
                 consumed += _del.Length;
             }
 
-            subscriptionId.Memory.Span.CopyTo(buffer.Slice(consumed).Span);
-            consumed += subscriptionId.Memory.Length;
+            subscriptionBytes.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subscriptionBytes.Length;
             _end.CopyTo(buffer.Slice(consumed));
+            
             
             return rented;
         }

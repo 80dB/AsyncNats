@@ -18,6 +18,7 @@
     using System.Runtime.InteropServices;
     using System.Collections.Concurrent;
 
+
     public class NatsConnection : INatsConnection
     {
         public NatsInformation NatsInformation { get; private set; }
@@ -39,7 +40,9 @@
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
-        private ConcurrentDictionary<Utf8String, Subscription> _subscriptions = new ConcurrentDictionary<Utf8String, Subscription>();
+        private ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
+        private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
+
 
         private class Subscription
         {
@@ -51,7 +54,7 @@
             {
                 Subject = subject;
                 QueueGroup = queueGroup ?? "";
-                SubscriptionId = subscriptionId.ToString();
+                SubscriptionId = subscriptionId;
 
                 _channel = Channel.CreateBounded<NatsMsg>(
                     new BoundedChannelOptions(queueLength) { 
@@ -63,9 +66,9 @@
                 Reader = _channel.Reader;
             }
 
-            public Utf8String Subject { get; }
-            public Utf8String QueueGroup { get; }
-            public Utf8String SubscriptionId { get; }
+            public NatsKey Subject { get; }
+            public NatsKey QueueGroup { get; }
+            public long SubscriptionId { get; }
             
             public ChannelWriter<NatsMsg> Writer { get; }
             public ChannelReader<NatsMsg> Reader { get; }
@@ -245,24 +248,33 @@
             _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
 
+        
+
         private async Task ProcessMessagesAsync(PipeReader reader, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting ProcessMessagesAsync loop");
             var parser = new NatsMessageParser(_memoryPool);
+
+            INatsServerMessage[] parsedMessageBuffer = new INatsServerMessage[1024]; //arbitrary
+
             while (!disconnectToken.IsCancellationRequested)
             {
                 var read = await reader.ReadAsync(disconnectToken);
+               
                 if (read.IsCanceled) break;
                 do
-                {
-                    var messages = parser.ParseMessages(read.Buffer, out var consumed);
+                {                    
+                    var parsedCount = parser.ParseMessages(read.Buffer, parsedMessageBuffer, out var consumed);                    
                     reader.AdvanceTo(read.Buffer.GetPosition(consumed));
                     if (consumed == 0) break;
+                                        
 
                     Interlocked.Add(ref _receiverQueueSize, (long)-consumed);
 
-                    foreach (var message in messages)
+                    for (var i = 0; i < parsedCount; i++)
                     {
+                        var message = parsedMessageBuffer[i];
+
                         Interlocked.Increment(ref _receivedMessagesTotal);
 
                         switch (message)
@@ -281,9 +293,7 @@
                             case NatsMsg msg:
                                 if(_subscriptions.TryGetValue(msg.SubscriptionId,out var subscription))
                                 {
-
-                                    msg.Rent();
-                                    if (subscription.Writer.TryWrite(msg)) continue;
+                                    msg.Rent();                                   
                                     await subscription.Writer.WriteAsync(msg, disconnectToken);
                                     msg.Release();
                                 }
@@ -316,6 +326,7 @@
                    
                     var consumed = result.Memory.Length;
                     Interlocked.Add(ref _senderQueueSize, -consumed);
+
 
                     if (position + consumed > bufferLength && position > 0)
                     {
@@ -350,6 +361,8 @@
             _logger?.LogTrace("Exited WriteSocketAsync loop");
         }
 
+       
+
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
         {
             var connect = new NatsConnect(Options);
@@ -381,7 +394,6 @@
         {
             Interlocked.Add(ref _senderQueueSize, buffer.Memory.Length);
 
-            if (_senderChannel.Writer.TryWrite(buffer)) return new ValueTask();
             return _senderChannel.Writer.WriteAsync(buffer, cancellationToken);
         }
 
@@ -440,18 +452,57 @@
             await WriteAsync(pub, cancellationToken);
         }
 
-        public async ValueTask PublishMemoryAsync(string subject, NatsMsgHeadersPublish headers, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default)
+
+        //proposed unified apis
+
+        public async ValueTask PublishAsync(NatsKey subject, CancellationToken cancellationToken = default)
         {        
-            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo,headers, payload);
+            var pub = NatsPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, NatsPayload.Empty);
             await WriteAsync(pub, cancellationToken);
         }
 
-        public async ValueTask PublishMemoryAsync(string subject, NatsMsgHeadersPublish headers, string? replyTo = null, CancellationToken cancellationToken = default)
-        {            
-            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo, headers, ReadOnlyMemory<byte>.Empty);
+        public async ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, CancellationToken cancellationToken = default)
+        {
+            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, headers, NatsPayload.Empty);
             await WriteAsync(pub, cancellationToken);
         }
 
+        public async ValueTask PublishAsync(NatsKey subject, NatsPayload payload, CancellationToken cancellationToken = default)
+        {
+            var pub = NatsPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, payload);
+            await WriteAsync(pub, cancellationToken);
+        }
+
+        public async ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default)
+        {
+            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, headers, payload);
+            await WriteAsync(pub, cancellationToken);
+        }
+
+        public async ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsPayload payload, CancellationToken cancellationToken = default)
+        {
+            var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo, payload);
+            await WriteAsync(pub, cancellationToken);
+        }
+
+        public async ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default)
+        {
+            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo, headers, payload);
+            await WriteAsync(pub, cancellationToken);
+        }
+
+
+
+
+#if !DISABLE_PUBLISH_RAW
+        public async ValueTask PublishRaw(ReadOnlyMemory<byte> rawData,int messageCount, CancellationToken cancellationToken)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            await WriteAsync(new NoOwner<byte>(rawData,()=>tcs.SetResult(true)), cancellationToken);
+            await tcs.Task;
+            Interlocked.Add(ref _transmitMessagesTotal, messageCount);
+        }
+#endif
 
         private ValueTask SendSubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
@@ -569,7 +620,7 @@
                 {
                     Subject = msg.Subject.AsString(),
                     ReplyTo = msg.ReplyTo.AsString(),
-                    SubscriptionId = msg.SubscriptionId.AsString(),
+                    SubscriptionId = msg.SubscriptionId.ToString(),
                     Payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload)
                 };
             }

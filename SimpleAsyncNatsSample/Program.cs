@@ -4,10 +4,12 @@
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
+    using System.Text;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats;
+    using EightyDecibel.AsyncNats.Messages;
 
     class Program
     {
@@ -60,8 +62,8 @@
             }
 
             var readerTypedTask = Task.Run(() => ReaderText(connection,"HELLO",cancellation.Token));
-            foreach(var i in Enumerable.Range(0,1000))
-                _= Task.Run(() => ReaderText(connection, $"HELLO{i}", cancellation.Token));
+            //foreach(var i in Enumerable.Range(0,1))
+            //    _= Task.Run(() => ReaderText(connection, $"HELLO{i}", cancellation.Token));
 
             var writerTask = Task.Run(() => WriterText(connection2, "HELLO", cancellation.Token));
 
@@ -117,9 +119,12 @@
 
         static async Task WriterText(NatsConnection connection,string topic, CancellationToken cancellationToken)
         {
+            NatsMsgHeaders header = new Dictionary<string, string>() { ["a"] = "b" };
+            NatsPayload payload = "test payload";
+
             while (!cancellationToken.IsCancellationRequested)
             {
-                await connection.PublishTextAsync(topic, "HELLO WORLD", cancellationToken: cancellationToken);
+                await connection.PublishAsync(topic, header, payload, cancellationToken: cancellationToken);
             }
         }
     }
