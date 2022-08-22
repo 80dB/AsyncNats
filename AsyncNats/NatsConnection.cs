@@ -41,7 +41,6 @@
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
         private ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
-        private readonly SemaphoreSlim _subscriptionsLock; // This lock is to prevent double modification, not 'dirty read' by the process loop 
 
 
         private class Subscription
@@ -119,8 +118,6 @@
                 }) ;
             
             
-            _subscriptionsLock = new SemaphoreSlim(1, 1);
-
             _disposeTokenSource = new CancellationTokenSource();
 
             _requestResponse = new NatsRequestResponse(this);
@@ -372,21 +369,13 @@
 
         private async Task Resubscribe(Socket socket, CancellationToken disconnectToken)
         {
-            await _subscriptionsLock.WaitAsync(disconnectToken);
-            try
+            foreach (var (id, subscription) in _subscriptions)
             {
-                foreach (var (id,subscription) in _subscriptions)
-                {
-                    _logger?.LogTrace("Resubscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+                _logger?.LogTrace("Resubscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
 
-                    using var buffer = NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
-                    await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
-                    Interlocked.Add(ref _transmitBytesTotal, buffer.Memory.Length);
-                }
-            }
-            finally
-            {
-                _subscriptionsLock.Release();
+                using var buffer = NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+                await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
+                Interlocked.Add(ref _transmitBytesTotal, buffer.Memory.Length);
             }
         }
 
@@ -431,6 +420,7 @@
             _disposeTokenSource.Dispose();
         }
 
+        
         public ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default)
         {
             return PublishMemoryAsync(subject, Encoding.UTF8.GetBytes(text), replyTo, cancellationToken);
@@ -452,8 +442,6 @@
             await WriteAsync(pub, cancellationToken);
         }
 
-
-        //proposed unified apis
 
         public async ValueTask PublishAsync(NatsKey subject, CancellationToken cancellationToken = default)
         {        
@@ -490,8 +478,6 @@
             var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo, headers, payload);
             await WriteAsync(pub, cancellationToken);
         }
-
-
 
 
 #if !DISABLE_PUBLISH_RAW
@@ -539,17 +525,8 @@
             }
             finally
             {
-                // No cancellation token for the unsubscribe
-                await _subscriptionsLock.WaitAsync(CancellationToken.None);
-                try
-                {
-                    await SendUnsubscribe(subscription);
-                    _subscriptions.TryRemove(subscription.SubscriptionId, out _);
-                }
-                finally
-                {
-                    _subscriptionsLock.Release();
-                }
+                await SendUnsubscribe(subscription);
+                _subscriptions.TryRemove(subscription.SubscriptionId, out _);
             }
         }
         private T DeserializeWrapper<T>(Func<NatsMsg, T> deserialize, NatsMsg message)

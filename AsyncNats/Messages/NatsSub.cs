@@ -2,6 +2,7 @@
 {
     using System;
     using System.Buffers;
+    using System.Buffers.Text;
     using System.IO.Pipelines;
     using System.Text;
     using System.Threading.Tasks;
@@ -12,18 +13,11 @@
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
 
-        public string Subject { get; set; } = string.Empty;
-        public string? QueueGroup { get; set; }
-        public string SubscriptionId { get; set; } = string.Empty;
-
-        public async ValueTask Serialize(PipeWriter writer)
-        {
-            await writer.WriteAsync(Encoding.UTF8.GetBytes($"SUB {Subject} {(string.IsNullOrEmpty(QueueGroup) ? "" : $"{QueueGroup} ")}{SubscriptionId}\r\n"));
-        }
-
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsKey subject, NatsKey queueGroup, long subscriptionId)
         {
-            byte[] subscriptionBytes = Encoding.UTF8.GetBytes(subscriptionId.ToString());
+            Span<byte> subscriptionBytes = stackalloc byte[20]; // Max 20 - Uint64.MaxValue = 18446744073709551615 
+            Utf8Formatter.TryFormat(subscriptionId, subscriptionBytes, out var subscriptionLength);
+            subscriptionBytes = subscriptionBytes.Slice(0, subscriptionLength);
 
             var length = _command.Length;
             length += subject.Memory.Length + 1;

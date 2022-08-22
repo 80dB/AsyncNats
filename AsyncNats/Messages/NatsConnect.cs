@@ -67,7 +67,7 @@
 
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsConnect msg)
         {
-            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions {IgnoreNullValues = true});
+            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             var hint = _command.Length +
                        serialized.Length +
                        _end.Length;

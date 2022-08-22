@@ -8,17 +8,13 @@
 
     public class NatsPong : INatsServerMessage, INatsClientMessage
     {
-
         private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PONG\r\n"));
 
-        public async ValueTask Serialize(PipeWriter writer)
-        {
-            await writer.WriteAsync(_command.Memory);
-        }
+        private static readonly NatsPong _instance = new NatsPong();
 
         public static INatsServerMessage ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
-            return new NatsPong();
+            return _instance;
         }
 
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)

@@ -10,14 +10,11 @@
     {
         private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PING\r\n"));
 
-        public async ValueTask Serialize(PipeWriter writer)
-        {
-            await writer.WriteAsync(_command.Memory);
-        }
-
+        private static readonly NatsPing _instance = new NatsPing();
+        
         public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
-            return new NatsPing();
+            return _instance;
         }
 
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)

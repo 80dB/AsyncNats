@@ -13,18 +13,12 @@
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("UNSUB "));
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
-
-        public string SubscriptionId { get; set; } = string.Empty;
-        public int MaxMessages { get; set; }
-
-        public async ValueTask Serialize(PipeWriter writer)
-        {
-            await writer.WriteAsync(Encoding.UTF8.GetBytes($"UNSUB {SubscriptionId} {MaxMessages}\r\n"));
-        }
-
+        
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, long subscriptionId, int? maxMessages)
         {
-            byte[] subscriptionBytes = Encoding.UTF8.GetBytes(subscriptionId.ToString());
+            Span<byte> subscriptionBytes = stackalloc byte[20]; // Max 20 - Uint64.MaxValue = 18446744073709551615 
+            Utf8Formatter.TryFormat(subscriptionId, subscriptionBytes, out var subscriptionLength);
+            subscriptionBytes = subscriptionBytes.Slice(0, subscriptionLength);
 
             var hint = _command.Length;
             hint += subscriptionBytes.Length;
