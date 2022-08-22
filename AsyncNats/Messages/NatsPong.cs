@@ -8,23 +8,18 @@
 
     public class NatsPong : INatsServerMessage, INatsClientMessage
     {
-        private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("PONG\r\n"));
+        private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PONG\r\n"));
 
-        public async ValueTask Serialize(PipeWriter writer)
-        {
-            await writer.WriteAsync(_command);
-        }
+        private static readonly NatsPong _instance = new NatsPong();
 
         public static INatsServerMessage ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
-            return new NatsPong();
+            return _instance;
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)
         {
-            var buffer = pool.Rent(_command.Length);
-            _command.CopyTo(buffer.Memory);
-            return buffer;
+            return _command;
         }
     }
 }

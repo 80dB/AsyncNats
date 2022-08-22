@@ -45,6 +45,9 @@
         [JsonPropertyName("echo")]
         public bool Echo { get; set; }
 
+        [JsonPropertyName("headers")]
+        public bool Headers { get; set; } = true;
+
         public NatsConnect()
         {
             Version = GetType().Assembly.GetName().Version.ToString();
@@ -62,9 +65,9 @@
             Echo = options.Echo;
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(MemoryPool<byte> pool, NatsConnect msg)
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsConnect msg)
         {
-            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions {IgnoreNullValues = true});
+            var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             var hint = _command.Length +
                        serialized.Length +
                        _end.Length;

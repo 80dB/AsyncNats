@@ -51,7 +51,7 @@ namespace EightyDecibel.AsyncNats
                     var subscription = _connection.Subscribe($"{_subject}.>", cancellationToken: cancellationToken);
                     await foreach (var message in subscription.WithCancellation(cancellationToken))
                     {
-                        if (!_responseHandlers.TryRemove(message.Subject, out var handler))
+                        if (!_responseHandlers.TryRemove(message.Subject.AsString(), out var handler))
                             continue;
 
                         handler(message);

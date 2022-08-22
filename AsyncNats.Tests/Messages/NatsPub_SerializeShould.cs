@@ -3,6 +3,7 @@
     using System;
     using System.Buffers;
     using System.Text;
+    using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 
@@ -13,7 +14,7 @@
         [Fact]
         public void BeSameWithoutReplyTo()
         {
-            using var rented = NatsPub.RentedSerialize(new NatsMemoryPool(), "FOO", null, Encoding.UTF8.GetBytes("Hello NATS!"));
+            using var rented = NatsPub.RentedSerialize(new NatsMemoryPool(), "FOO", NatsKey.Empty, Encoding.UTF8.GetBytes("Hello NATS!"));
             var text = Encoding.UTF8.GetString(rented.Memory.Span);
 
             Assert.Equal("PUB FOO 11\r\nHello NATS!\r\n", text);

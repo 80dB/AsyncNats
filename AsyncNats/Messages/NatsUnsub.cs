@@ -6,25 +6,22 @@
     using System.IO.Pipelines;
     using System.Text;
     using System.Threading.Tasks;
+    using System.Xml.Linq;
 
     public class NatsUnsub : INatsClientMessage
     {
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("UNSUB "));
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
-
-        public string SubscriptionId { get; set; } = string.Empty;
-        public int MaxMessages { get; set; }
-
-        public async ValueTask Serialize(PipeWriter writer)
+        
+        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, long subscriptionId, int? maxMessages)
         {
-            await writer.WriteAsync(Encoding.UTF8.GetBytes($"UNSUB {SubscriptionId} {MaxMessages}\r\n"));
-        }
+            Span<byte> subscriptionBytes = stackalloc byte[20]; // Max 20 - Uint64.MaxValue = 18446744073709551615 
+            Utf8Formatter.TryFormat(subscriptionId, subscriptionBytes, out var subscriptionLength);
+            subscriptionBytes = subscriptionBytes.Slice(0, subscriptionLength);
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, string subscriptionId, int? maxMessages)
-        {
             var hint = _command.Length;
-            hint += subscriptionId.Length;
+            hint += subscriptionBytes.Length;
             if (maxMessages != null)
             {
                 if (maxMessages < 10) hint += 1;
@@ -44,7 +41,9 @@
             var buffer = rented.Memory;
             _command.CopyTo(buffer);
             var consumed = _command.Length;
-            consumed += Encoding.UTF8.GetBytes(subscriptionId, buffer.Slice(consumed).Span);
+
+            subscriptionBytes.CopyTo(buffer.Slice(consumed).Span);
+            consumed += subscriptionBytes.Length;
             if (maxMessages != null)
             {
                 _del.CopyTo(buffer.Slice(consumed));

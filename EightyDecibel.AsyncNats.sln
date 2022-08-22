@@ -23,6 +23,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "InterfaceAsyncNatsSample", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LatencyAsyncNatsSample", "LatencyAsyncNatsSample\LatencyAsyncNatsSample.csproj", "{B041A048-1B70-41A0-9090-658090D8BDB5}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleBenchmark", "SimpleBenchmark\SimpleBenchmark.csproj", "{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,6 +59,10 @@ Global
 		{B041A048-1B70-41A0-9090-658090D8BDB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B041A048-1B70-41A0-9090-658090D8BDB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B041A048-1B70-41A0-9090-658090D8BDB5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -69,6 +75,7 @@ Global
 		{52FC10C7-BBF2-4C5B-8FEA-AA9A79BF284D} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
 		{0107099C-A20A-4118-A910-9AE23F4D58DE} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
 		{B041A048-1B70-41A0-9090-658090D8BDB5} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
+		{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0} = {2AB7A94E-F3F6-4DA9-975C-3F4D026C1CEF}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E5462DB8-9C99-488A-9E2D-D7605CDB80CE}
