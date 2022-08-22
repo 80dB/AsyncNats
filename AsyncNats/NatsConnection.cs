@@ -563,15 +563,24 @@
         }
 
         /// <summary>
-        /// Warning, you are responsible for disposing the returned <see cref="NatsMsg"/>
+        /// Warning, NatsMsg object will by recycled after each iteration. 
         /// </summary>
         /// <param name="subject"></param>
         /// <param name="queueGroup"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
-        {
-            return InternalSubscribe(subject, queueGroup, cancellationToken);
+        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
+        {                        
+            await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
+            {
+                try
+                {
+                    yield return msg;
+                }
+                finally{
+                    msg.Release();
+                }
+            }
         }
 
 

@@ -70,6 +70,7 @@
                 {
                     await RunBenchmark(1, 1, messageSize, rate);
                 }
+                Console.WriteLine();
             }
             Console.WriteLine();
 
@@ -361,7 +362,6 @@
                             min = Math.Min(rtt, min);
                         }                        
 
-                        message.Release();
                     }
                 }
                 catch(OperationCanceledException ex)
