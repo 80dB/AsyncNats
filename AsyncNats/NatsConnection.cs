@@ -5,7 +5,6 @@
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.IO.Pipelines;
-    using System.Linq;
     using System.Net.Sockets;
     using System.Runtime.CompilerServices;
     using System.Text;
@@ -15,18 +14,16 @@
     using Messages;
     using Rpc;
     using Microsoft.Extensions.Logging;
-    using System.Runtime.InteropServices;
     using System.Collections.Concurrent;
 
 
     public class NatsConnection : INatsConnection
     {
-        public NatsInformation NatsInformation { get; private set; }
-
+        public NatsInformation? NatsInformation { get; private set; }
 
         private static long _nextSubscriptionId = 1;
 
-        private ILogger<NatsConnection>? _logger;
+        private readonly ILogger<NatsConnection>? _logger;
 
         private long _senderQueueSize;
         private long _receiverQueueSize;
@@ -40,7 +37,7 @@
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
-        private ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
+        private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
 
 
         private class Subscription
@@ -154,7 +151,7 @@
                 Status = NatsStatus.Connecting;
 
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-                socket.NoDelay = true;                
+                socket.NoDelay = true;
 
                 using var internalDisconnect = new CancellationTokenSource();
 
@@ -358,8 +355,6 @@
             _logger?.LogTrace("Exited WriteSocketAsync loop");
         }
 
-       
-
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
         {
             var connect = new NatsConnect(Options);
@@ -419,7 +414,6 @@
             _disposeTokenSource.Cancel();
             _disposeTokenSource.Dispose();
         }
-
         
         public ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default)
         {
@@ -438,11 +432,10 @@
 
         public async ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default)
         {
-            var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo, payload);
+            var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo ?? NatsKey.Empty, payload);
             await WriteAsync(pub, cancellationToken);
         }
-
-
+        
         public async ValueTask PublishAsync(NatsKey subject, CancellationToken cancellationToken = default)
         {        
             var pub = NatsPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, NatsPayload.Empty);
@@ -569,7 +562,7 @@
         /// <param name="queueGroup"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {                        
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {

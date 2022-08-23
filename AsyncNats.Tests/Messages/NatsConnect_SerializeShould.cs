@@ -1,4 +1,6 @@
-﻿namespace AsyncNats.Tests.Messages
+﻿using System.Text.Json.Serialization;
+
+namespace AsyncNats.Tests.Messages
 {
     using System;
     using System.Buffers;
@@ -42,7 +44,7 @@
             text = text.Replace("CONNECT ", "");
             text = text.Replace("\r\n", "");
 
-            Assert.Equal(JsonSerializer.Serialize(_connect, new JsonSerializerOptions {IgnoreNullValues = true}), text);
+            Assert.Equal(JsonSerializer.Serialize(_connect, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), text);
         }
     }
 }

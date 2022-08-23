@@ -364,7 +364,7 @@
 
                     }
                 }
-                catch(OperationCanceledException ex)
+                catch(OperationCanceledException)
                 {
                     //swallow
                 }

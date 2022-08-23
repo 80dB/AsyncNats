@@ -12,7 +12,7 @@
 
         public T Deserialize<T>(ReadOnlyMemory<byte> buffer)
         {
-            return JsonSerializer.Deserialize<T>(buffer.Span);
+            return JsonSerializer.Deserialize<T>(buffer.Span)!;
         }
     }
 }
