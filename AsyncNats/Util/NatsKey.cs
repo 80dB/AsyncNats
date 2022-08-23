@@ -17,23 +17,18 @@ namespace EightyDecibel.AsyncNats
         private readonly string _string;
 
         public NatsKey(ReadOnlyMemory<byte> value):this(value,false)
-        {
-            
-
-        }
+        { }
 
         internal NatsKey(ReadOnlyMemory<byte> value, bool convert = false)
         {
             Memory = value;
             _string = convert ? Encoding.UTF8.GetString(value.Span) : string.Empty;
-
         }
 
-        public NatsKey(string value)
+        public NatsKey(string? value)
         {
             _string = value ?? string.Empty;
             Memory = (_string == string.Empty) ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value);
-
         }
 
         public string AsString()
@@ -78,7 +73,12 @@ namespace EightyDecibel.AsyncNats
             return hash.ToHashCode();
         }
 
-        public static implicit operator NatsKey(string value) => new NatsKey(value);
+        public override string ToString()
+        {
+            return AsString();
+        }
+
+        public static implicit operator NatsKey(string value) => string.IsNullOrEmpty(value) ? NatsKey.Empty : new NatsKey(value);
 
         public static implicit operator NatsKey(ReadOnlyMemory<byte> value) => new NatsKey(value);
 

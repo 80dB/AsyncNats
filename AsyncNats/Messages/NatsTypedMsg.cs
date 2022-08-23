@@ -2,9 +2,9 @@
 {
     public class NatsTypedMsg<T>
     {
-        public string Subject { get; set; } = string.Empty;
-        public string SubscriptionId { get; set; } = string.Empty;
-        public string ReplyTo { get; set; } = string.Empty;
+        public NatsKey Subject { get; set; } = NatsKey.Empty;
+        public NatsKey SubscriptionId { get; set; } = NatsKey.Empty;
+        public NatsKey ReplyTo { get; set; } = NatsKey.Empty;
 #nullable disable
         public T Payload { get; set; }
 #nullable restore

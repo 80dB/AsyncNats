@@ -63,6 +63,15 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v1.0.2
+* Breaking changes:
+  * Removed the PublishMemoryAsync/PublishTextAsync methods in favour of a single PublishAsync that handles both string and byte[] types
+  * Removed the RequestMemory/RequestText methods in favour of a single Request that handles both string and byte[] types
+  * Removed various added PublishAsync overrides in favour of a single PublishAsync with optional parameters
+* Overridden NatsKey.ToString for logging purposes
+* Added header support to Request methods
+* Note: if headers are passed to any function it will always do a HPUB, if headers are null it will always do a PUB
+
 ### v1.0.1
 * @israellot improved performance / memory allocations
 * @israellot added a more realistic benchmark

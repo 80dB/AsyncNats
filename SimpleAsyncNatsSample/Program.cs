@@ -124,7 +124,7 @@
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                await connection.PublishAsync(topic, header, payload, cancellationToken: cancellationToken);
+                await connection.PublishAsync(topic, payload, headers: header, cancellationToken: cancellationToken);
             }
         }
     }
