@@ -553,8 +553,8 @@
             {                
                 return new NatsTypedMsg<T>
                 {
-                    Subject = msg.Subject.AsString(),
-                    ReplyTo = msg.ReplyTo.AsString(),
+                    Subject = msg.Subject,
+                    ReplyTo = msg.ReplyTo,
                     SubscriptionId = msg.SubscriptionId.ToString(),
                     Payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload)
                 };
