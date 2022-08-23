@@ -1,14 +1,8 @@
-﻿
-
-namespace EightyDecibel.AsyncNats
+﻿namespace EightyDecibel.AsyncNats
 {
     using System;
-    using System.Collections.Generic;
     using System.Runtime.CompilerServices;
     using System.Text;
-
-
-
 
     public readonly struct NatsPayload : IEquatable<NatsPayload>
     {
@@ -16,7 +10,6 @@ namespace EightyDecibel.AsyncNats
         public bool IsEmpty => Memory.Length == 0;
 
         public readonly ReadOnlyMemory<byte> Memory;
-
         private readonly string _string;
 
         public NatsPayload(ReadOnlyMemory<byte> value)
@@ -25,10 +18,10 @@ namespace EightyDecibel.AsyncNats
             _string = string.Empty;
         }
 
-        public NatsPayload(string value)
+        public NatsPayload(string? value)
         {
             _string = value ?? string.Empty;
-            Memory = (_string == string.Empty) ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value);
+            Memory = _string == string.Empty ? ReadOnlyMemory<byte>.Empty : Encoding.UTF8.GetBytes(value);
         }
 
         public string AsString()
@@ -58,6 +51,7 @@ namespace EightyDecibel.AsyncNats
             //TODO Should cache?
             return ComputeHashCode(Memory.Span);
         }
+
         private static int ComputeHashCode(ReadOnlySpan<byte> span)
         {
             var hash = new HashCode();
@@ -66,13 +60,9 @@ namespace EightyDecibel.AsyncNats
 
             return hash.ToHashCode();
         }
-
-
+        
         public static implicit operator NatsPayload(string value) => new NatsPayload(value);
-
         public static implicit operator NatsPayload(ReadOnlyMemory<byte> value) => new NatsPayload(value);
-
         public static implicit operator NatsPayload(byte[] value) => new NatsPayload(value);
     }
 }
-

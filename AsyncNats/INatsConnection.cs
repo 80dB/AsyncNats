@@ -26,9 +26,16 @@
         ValueTask DisconnectAsync();
 
         ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null, CancellationToken cancellationToken = default);
-        ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null, CancellationToken cancellationToken = default);
         ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default);
         ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default);
+
+        ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsPayload payload, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsPayload payload, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default);
 
         IAsyncEnumerable<NatsMsg> Subscribe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default);
         IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);

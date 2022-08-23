@@ -63,6 +63,11 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v1.0.1
+* @israellot improved performance / memory allocations
+* @israellot added a more realistic benchmark
+* @israellot added header support 
+
 ### v1.0.0
 * Requests will only use a single subscription instead of setting up a new subscription every request/response
 * Moved request/response handling to it's own separate class
