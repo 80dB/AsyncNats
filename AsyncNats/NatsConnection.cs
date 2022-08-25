@@ -5,7 +5,6 @@
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.IO.Pipelines;
-    using System.Linq;
     using System.Net.Sockets;
     using System.Runtime.CompilerServices;
     using System.Text;
@@ -15,19 +14,17 @@
     using Messages;
     using Rpc;
     using Microsoft.Extensions.Logging;
-    using System.Runtime.InteropServices;
     using System.Collections.Concurrent;
     using System.Net;
+    using System.Linq;
 
     public class NatsConnection : INatsConnection
     {
-        public NatsInformation NatsInformation { get; private set; }
-
-      
+        public NatsInformation? NatsInformation { get; private set; }
 
         private static long _nextSubscriptionId = 1;
 
-        private ILogger<NatsConnection>? _logger;
+        private readonly ILogger<NatsConnection>? _logger;
 
         private long _senderQueueSize;
         private long _receiverQueueSize;
@@ -41,7 +38,7 @@
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
-        private ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
+        private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
         private NatsServerPool.NatsHost _currentServer;
 
         private class Subscription
@@ -50,10 +47,10 @@
             // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
             private readonly Channel<NatsMsg> _channel;
 
-            public Subscription(string subject, string? queueGroup, long subscriptionId, int queueLength)
+            public Subscription(NatsKey subject, NatsKey? queueGroup, long subscriptionId, int queueLength)
             {
                 Subject = subject;
-                QueueGroup = queueGroup ?? "";
+                QueueGroup = queueGroup ?? NatsKey.Empty;
                 SubscriptionId = subscriptionId;
 
                 _channel = Channel.CreateBounded<NatsMsg>(
@@ -93,8 +90,6 @@
             }
         }
 
-
-
         public event EventHandler<Exception>? ConnectionException;
         public event EventHandler<NatsStatus>? StatusChange;
         public event EventHandler<NatsInformation>? ConnectionInformation;
@@ -113,7 +108,7 @@
 
         public NatsConnection(INatsOptions options)
         {
-            Options = options;            
+            Options = options;
 
             _memoryPool = new NatsMemoryPool(options.ArrayPool);
 
@@ -164,7 +159,7 @@
                 Status = NatsStatus.Connecting;
 
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-                socket.NoDelay = true;                
+                socket.NoDelay = true;
 
                 using var internalDisconnect = new CancellationTokenSource();
 
@@ -409,8 +404,6 @@
             _logger?.LogTrace("Exited WriteSocketAsync loop");
         }
 
-       
-
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
         {
             var connect = new NatsConnect(Options);
@@ -470,25 +463,17 @@
             _disposeTokenSource.Cancel();
             _disposeTokenSource.Dispose();
         }
-        
-        public ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default)
+        public ValueTask PublishObjectAsync<T>(NatsKey subject, T payload, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
-            return PublishMemoryAsync(subject, Encoding.UTF8.GetBytes(text), replyTo, cancellationToken);
+            return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo, headers, cancellationToken);
         }
 
-        public ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null, CancellationToken cancellationToken = default)
+        public async ValueTask PublishAsync(NatsKey subject, NatsPayload? payload = null, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
-            return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo, cancellationToken);
-        }
+            var pub = headers == null
+                ? NatsPub.RentedSerialize(_memoryPool, subject, replyTo ?? NatsKey.Empty, payload ?? NatsPayload.Empty)
+                : NatsHPub.RentedSerialize(_memoryPool, subject, replyTo ?? NatsKey.Empty, headers ?? NatsMsgHeaders.Empty, payload ?? NatsPayload.Empty);
 
-        public ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null, CancellationToken cancellationToken = default)
-        {
-            return PublishMemoryAsync(subject, payload?.AsMemory() ?? ReadOnlyMemory<byte>.Empty, replyTo, cancellationToken);
-        }
-
-        public async ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo, payload);
             await WriteAsync(pub, cancellationToken);
         }
 
@@ -550,7 +535,7 @@
             return WriteAsync(NatsUnsub.RentedSerialize(_memoryPool, subscription.SubscriptionId, null), CancellationToken.None);
         }
 
-        private async IAsyncEnumerable<NatsMsg> InternalSubscribe(string subject, string? queueGroup, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        private async IAsyncEnumerable<NatsMsg> InternalSubscribe(NatsKey subject, NatsKey? queueGroup, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var subscription = new Subscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
 
@@ -595,7 +580,7 @@
             return msg;
         }
 
-        public async IAsyncEnumerable<NatsMsg> Subscribe(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsMsg> Subscribe(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             static NatsMsg Deserialize(NatsMsg msg)
             {
@@ -615,7 +600,7 @@
         /// <param name="queueGroup"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {                        
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
@@ -630,7 +615,7 @@
         }
 
 
-        public async IAsyncEnumerable<string> SubscribeText(string subject, string? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<string> SubscribeText(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             static string Deserialize(NatsMsg msg)
             {
@@ -644,14 +629,14 @@
         }
 
                        
-        public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup=null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             NatsTypedMsg<T> Deserialize(NatsMsg msg)
             {                
                 return new NatsTypedMsg<T>
                 {
-                    Subject = msg.Subject.AsString(),
-                    ReplyTo = msg.ReplyTo.AsString(),
+                    Subject = msg.Subject,
+                    ReplyTo = msg.ReplyTo,
                     SubscriptionId = msg.SubscriptionId.ToString(),
                     Payload = (serializer ?? Options.Serializer).Deserialize<T>(msg.Payload)
                 };
@@ -663,7 +648,7 @@
             }
         }
 
-        public async IAsyncEnumerable<T> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<T> SubscribeObject<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             T Deserialize(NatsMsg msg)
             {
@@ -676,24 +661,14 @@
             }
         }
 
-        public Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<byte[]> Request(NatsKey subject, NatsPayload request, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
-            return _requestResponse.InternalRequest(subject, request.AsMemory(), msg => msg.Payload.ToArray(), timeout, cancellationToken);
+            return _requestResponse.InternalRequest(subject, request, msg => msg.Payload.ToArray(), timeout, headers, cancellationToken);
         }
 
-        public Task<Memory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        public Task<TResponse> RequestObject<TRequest, TResponse>(NatsKey subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
-            return _requestResponse.InternalRequest(subject, request, msg => msg.Payload.ToArray().AsMemory(), timeout, cancellationToken);
-        }
-
-        public Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            return _requestResponse.InternalRequest(subject, Encoding.UTF8.GetBytes(request), msg => Encoding.UTF8.GetString(msg.Payload.Span), timeout, cancellationToken);
-        }
-
-        public Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
-        {
-            return _requestResponse.InternalRequest(subject, (serializer ?? Options.Serializer).Serialize(request), msg => (serializer ?? Options.Serializer).Deserialize<TResponse>(msg.Payload), timeout, cancellationToken);
+            return _requestResponse.InternalRequest(subject, (serializer ?? Options.Serializer).Serialize(request), msg => (serializer ?? Options.Serializer).Deserialize<TResponse>(msg.Payload), timeout, headers, cancellationToken);
         }
 
         public TContract GenerateContractClient<TContract>(string? baseSubject = null)

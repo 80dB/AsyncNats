@@ -50,7 +50,7 @@
 
             var str = sb.ToString();
             Console.WriteLine("Sending string {0} characters long", str.Length);
-            await connection.PublishTextAsync("long.message", str, cancellationToken: cancellationToken);
+            await connection.PublishAsync("long.message", str, cancellationToken: cancellationToken);
         }
     }
 }

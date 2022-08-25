@@ -68,7 +68,7 @@ namespace EightyDecibel.AsyncNats
             _logger?.LogTrace("Exited response listener");
         }
 
-        internal async Task<TResponse> InternalRequest<TResponse>(string subject, Memory<byte> request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        internal async Task<TResponse> InternalRequest<TResponse>(NatsKey subject, NatsPayload request, Func<NatsMsg, TResponse> deserialize, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
             // First start the listener if it's not listening yet
             StartListener();
@@ -100,7 +100,7 @@ namespace EightyDecibel.AsyncNats
                     _responseHandlers.TryRemove(replyTo, out _);
                 });
 
-            await _connection.PublishMemoryAsync(subject, request, replyTo, linkedCancellationToken);
+            await _connection.PublishAsync(subject, request, replyTo, headers, linkedCancellationToken);
             return await taskSource.Task;
         }
     }

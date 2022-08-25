@@ -25,20 +25,16 @@
         ValueTask ConnectAsync();
         ValueTask DisconnectAsync();
 
-        ValueTask PublishObjectAsync<T>(string subject, T payload, string? replyTo = null, CancellationToken cancellationToken = default);
-        ValueTask PublishAsync(string subject, byte[]? payload, string? replyTo = null, CancellationToken cancellationToken = default);
-        ValueTask PublishTextAsync(string subject, string text, string? replyTo = null, CancellationToken cancellationToken = default);
-        ValueTask PublishMemoryAsync(string subject, ReadOnlyMemory<byte> payload, string? replyTo = null, CancellationToken cancellationToken = default);
+        ValueTask PublishObjectAsync<T>(NatsKey subject, T payload, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);
+        ValueTask PublishAsync(NatsKey subject, NatsPayload? payload = null, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);
 
-        IAsyncEnumerable<NatsMsg> Subscribe(string subject, string? queueGroup = null, CancellationToken cancellationToken = default);
-        IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
-        IAsyncEnumerable<T> SubscribeObject<T>(string subject, string? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
-        IAsyncEnumerable<string> SubscribeText(string subject, string? queueGroup = null, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<NatsMsg> Subscribe(NatsKey subject, NatsKey? queueGroup = null, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<T> SubscribeObject<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> SubscribeText(NatsKey subject, NatsKey? queueGroup = null, CancellationToken cancellationToken = default);
 
-        Task<byte[]> Request(string subject, byte[] request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
-        Task<Memory<byte>> RequestMemory(string subject, Memory<byte> request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
-        Task<string> RequestText(string subject, string request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
-        Task<TResponse> RequestObject<TRequest, TResponse>(string subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
+        Task<byte[]> Request(NatsKey subject, NatsPayload request, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);
+        Task<TResponse> RequestObject<TRequest, TResponse>(NatsKey subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);
 
         TContract GenerateContractClient<TContract>(string? baseSubject = null);
         Task StartContractServer<TContract>(TContract contract, CancellationToken cancellationToken, string? baseSubject = null, string? queueGroup = null, INatsSerializer? serializer = null, TaskScheduler? taskScheduler = null);
