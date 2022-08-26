@@ -20,8 +20,6 @@
 
             var messageSizes = new[] { 0,8, 16, 32, 64, 128, 256, 512, 1024 };
 
-            
-
             Console.WriteLine();
 
             //This first test sends a precomputed large buffer of 100mb 
@@ -90,7 +88,7 @@
             Console.WriteLine("---Roundtrip 100 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 10_000,50_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
                 {
                     await RunBenchmark(100, 1, messageSize, rate);
                 }
@@ -280,16 +278,19 @@
                 var delay = msgPerSecond > 0 ? (long)(Stopwatch.Frequency * batch / msgPerSecond) : 0;
                 var adjustment = 0L;
 
+                var initialRandomDelay = Random.Shared.Next(0, 10);
+
+                await Task.Delay(initialRandomDelay);
+
                 NatsKey subjectUtf8 = new NatsKey(subject);
 
                 while (!cancellationToken.IsCancellationRequested)
-                {                    
+                {
                     var now = Stopwatch.GetTimestamp();
+                    BitConverter.TryWriteBytes(message, Stopwatch.GetTimestamp());
 
-                    BitConverter.TryWriteBytes(message, now);
-
-                    for(var i = batch-1; i >= 0; i--)
-                    {
+                    for (var i = batch-1; i >= 0; i--)
+                    {                        
                         await connection.PublishAsync(subjectUtf8, message, cancellationToken: CancellationToken.None);                        
                     }
 
@@ -310,8 +311,6 @@
             async Task FloodWriterTask(NatsConnection connection, string subject, CancellationToken cancellationToken)
             {
                 await Task.Yield();
-
-               
 
                 var payload = new byte[messageSize];
                 var message = NatsPub.RentedSerialize(new NatsMemoryPool(), subject, NatsKey.Empty, payload);

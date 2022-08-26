@@ -15,8 +15,8 @@ namespace EightyDecibel.AsyncNats
         public NatsDefaultOptions()
         {
             Server = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4222);
-            SenderQueueLength = 5000;
-            ReceiverQueueLength = 5000;
+            SenderQueueLength = 4096;
+            ReceiverQueueLength = 4096;
             Serializer = new NatsDefaultSerializer();
             ArrayPool = ArrayPool<byte>.Create(1024*1024, 1024);
 

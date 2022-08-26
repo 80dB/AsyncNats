@@ -34,6 +34,8 @@
 
         private Task? _readWriteAsyncTask;
         private CancellationTokenSource? _disconnectSource;
+        private ReadOnlyMemory<byte> _reconnectResendBuffer = ReadOnlyMemory<byte>.Empty;
+
         private readonly Channel<IMemoryOwner<byte>> _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
@@ -110,9 +112,11 @@
             _memoryPool = new NatsMemoryPool(options.ArrayPool);
 
             _senderChannel = Channel.CreateBounded<IMemoryOwner<byte>>(
-                new BoundedChannelOptions(options.SenderQueueLength) { 
-                    SingleReader = false
-                }) ;
+                new BoundedChannelOptions(options.SenderQueueLength)
+                {
+                    SingleReader = true,
+                    SingleWriter = false
+                });
             
             
             _disposeTokenSource = new CancellationTokenSource();
@@ -241,9 +245,7 @@
             }
             _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
-
-        
-
+                
         private async Task ProcessMessagesAsync(PipeReader reader, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting ProcessMessagesAsync loop");
@@ -299,39 +301,46 @@
             _logger?.LogTrace("Exited ReadSocketAsync loop");
         }
 
-
         private async Task WriteSocketAsync(Socket socket, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting WriteSocketAsync loop");
 
-            var reader = _senderChannel.Reader;
-            var buffer = new byte[socket.SendBufferSize];
+            ChannelReader<IMemoryOwner<byte>> reader = _senderChannel.Reader;
+            byte[] buffer = new byte[socket.SendBufferSize];
             var bufferLength = buffer.Length;
 
             await SendConnect(socket, disconnectToken);
             await Resubscribe(socket, disconnectToken);
-            while (!disconnectToken.IsCancellationRequested)
+
+            if (_reconnectResendBuffer.Length > 0)
             {
+                _logger?.LogTrace("Sending saved reconnect resend buffer");
+                await SocketSend(_reconnectResendBuffer);
+                _reconnectResendBuffer = ReadOnlyMemory<byte>.Empty;
+            }
+
+            while (!disconnectToken.IsCancellationRequested)
+            {                
                 var position = 0;
                 var result = await reader.ReadAsync(disconnectToken);
                 
                 do
-                {
-                   
+                {                   
                     var consumed = result.Memory.Length;
                     Interlocked.Add(ref _senderQueueSize, -consumed);
 
-
                     if (position + consumed > bufferLength && position > 0)
-                    {
-                        await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
+                    {                        
+                        await SocketSend(buffer.AsMemory(0, position));
+
                         Interlocked.Add(ref _transmitBytesTotal, position);
                         position = 0;
                     }
 
                     if (consumed > bufferLength)
-                    {
-                        await socket.SendAsync(result.Memory, SocketFlags.None, disconnectToken);
+                    {                        
+                        await SocketSend(result.Memory);
+
                         Interlocked.Add(ref _transmitBytesTotal, result.Memory.Length);
                     }
                     else
@@ -341,18 +350,48 @@
                     }
 
                     result.Dispose();
-
                     Interlocked.Increment(ref _transmitMessagesTotal);
                     
                 } while (reader.TryRead(out result));
 
                 if (position == 0) continue;
 
-                await socket.SendAsync(buffer.AsMemory(0, position), SocketFlags.None, disconnectToken);
+                await SocketSend(buffer.AsMemory(0, position));
+
                 Interlocked.Add(ref _transmitBytesTotal, position);
             }
 
             _logger?.LogTrace("Exited WriteSocketAsync loop");
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+            async ValueTask<int> SocketSend(ReadOnlyMemory<byte> data)
+            {
+                int sent = 0;
+                try
+                {
+                    sent = await socket.SendAsync(data, SocketFlags.None, disconnectToken);
+
+                    //it seems there's no chance sent can be < data length for send success
+                    return sent;
+                }
+                catch (Exception ex) {
+                    _logger?.LogError(ex,"Error trying to write to socket");
+
+                    if (sent < data.Length && data.Length<= socket.SendBufferSize)
+                    {
+                        _logger?.LogTrace("Saving reconnect resend buffer");
+
+                        var buffer = new byte[data.Length - sent];
+                        data.Slice(sent).CopyTo(buffer);
+                        _reconnectResendBuffer = buffer;
+
+                        throw new SocketException();
+                    }
+                    else
+                        return sent;
+                }
+            }
         }
 
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
