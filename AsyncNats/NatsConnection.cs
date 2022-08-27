@@ -115,7 +115,8 @@
                 new BoundedChannelOptions(options.SenderQueueLength)
                 {
                     SingleReader = true,
-                    SingleWriter = false
+                    SingleWriter = false,
+                    AllowSynchronousContinuations=true
                 });
             
             
@@ -323,13 +324,13 @@
             {                
                 var position = 0;
                 var result = await reader.ReadAsync(disconnectToken);
-                
+
                 do
                 {                   
                     var consumed = result.Memory.Length;
                     Interlocked.Add(ref _senderQueueSize, -consumed);
 
-                    if (position + consumed > bufferLength && position > 0)
+                    if (position > 0 && (position + consumed > bufferLength || consumed > bufferLength))
                     {                        
                         await SocketSend(buffer.AsMemory(0, position));
 
@@ -337,7 +338,7 @@
                         position = 0;
                     }
 
-                    if (consumed > bufferLength)
+                    if (reader.Count == 0 || consumed > bufferLength)
                     {                        
                         await SocketSend(result.Memory);
 
