@@ -55,10 +55,13 @@
                 SubscriptionId = subscriptionId;
 
                 _channel = Channel.CreateBounded<NatsMsg>(
-                    new BoundedChannelOptions(queueLength) { 
-                        SingleReader=true,
-                        SingleWriter=true
+                    new BoundedChannelOptions(queueLength)
+                    {
+                        SingleReader = true,
+                        SingleWriter = true,
+                        AllowSynchronousContinuations = true
                     });
+
 
                 Writer = _channel.Writer;
                 Reader = _channel.Reader;
@@ -264,7 +267,6 @@
                     var parsedCount = parser.ParseMessages(read.Buffer, parsedMessageBuffer, out var consumed);                    
                     reader.AdvanceTo(read.Buffer.GetPosition(consumed));
                     if (consumed == 0) break;
-                                        
 
                     Interlocked.Add(ref _receiverQueueSize, (long)-consumed);
 
@@ -276,6 +278,14 @@
 
                         switch (message)
                         {
+                            case NatsMsg msg:
+                                if (_subscriptions.TryGetValue(msg.SubscriptionId, out var subscription))
+                                {
+                                    msg.Rent();
+                                    await subscription.Writer.WriteAsync(msg, disconnectToken);
+                                    msg.Release();
+                                }
+                                break;
                             case NatsPing _:
                                 await WriteAsync(NatsPong.RentedSerialize(_memoryPool), disconnectToken);
                                 break;
@@ -285,16 +295,7 @@
 
                                 NatsInformation = info;
                                 ConnectionInformation?.Invoke(this, info);
-                                break;
-
-                            case NatsMsg msg:
-                                if(_subscriptions.TryGetValue(msg.SubscriptionId,out var subscription))
-                                {
-                                    msg.Rent();                                   
-                                    await subscription.Writer.WriteAsync(msg, disconnectToken);
-                                    msg.Release();
-                                }
-                                break;
+                                break;                            
                         }
                     }
                 } while (reader.TryRead(out read));
