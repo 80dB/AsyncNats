@@ -13,14 +13,18 @@
     using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
 
+
+
     class Program
     {
         static async Task Main(string[] args)
         {
-
+           
             var messageSizes = new[] { 0,8, 16, 32, 64, 128, 256, 512, 1024 };
 
+
             Console.WriteLine();
+
 
             //This first test sends a precomputed large buffer of 100mb 
             //It should get us a figure close to what NATS can ingest and drop
@@ -30,6 +34,7 @@
                 await RunBenchmark(1, 0, messageSize, 0,false);
             }
             Console.WriteLine();
+        
 
             //Here we try to flood NATS but using the normal publish path, generating each message on the fly
             //This gives us an rough idea of the publish path overhead 
@@ -40,6 +45,7 @@
             }
             Console.WriteLine();
 
+        
             //Here we repeat the test above but publishing from 100 different tasks
             //This measures the effect of contention
             Console.WriteLine("---Publish only ( generate ) 100 pub---");
@@ -49,7 +55,7 @@
             }
             Console.WriteLine();
 
-            
+
             //Here we try to flood NATS with one processing subscription.
             //It should give us an idea of the read path overhead            
             Console.WriteLine("---Roundtrip raw pub 1 sub---");
@@ -59,24 +65,29 @@
             }
             Console.WriteLine();
 
-            
+
+
+
             //Here we target a specific message/sec target rate at the writer task
+            messageSizes = new[] { 8, 32, 128, 512, 1024 };
             Console.WriteLine("---Roundtrip 1 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 1_000,10_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
                 {
                     await RunBenchmark(1, 1, messageSize, rate);
                 }
                 Console.WriteLine();
             }
             Console.WriteLine();
+            
 
             //Here we add 99 more unrelated subscriptions
             Console.WriteLine("---Roundtrip 1 pub 100 sub---");
+            messageSizes = new[] { 8, 32, 128, 512, 1024 };
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 1_000, 10_000,100_000, 500_000, 750_000, 1_000_000, 1_250_000})
                 {
                     await RunBenchmark(1, 100, messageSize, rate);
                 }
@@ -84,11 +95,15 @@
             }
             Console.WriteLine();
 
+
+        
+            messageSizes = new[] { 8, 16, 32, 64, 128, 256, 512, 1024 };
+
             //Here publishing and generating messages from 100 different tasks
             Console.WriteLine("---Roundtrip 100 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 10_000,50_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 1000, 10_000,50_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
                 {
                     await RunBenchmark(100, 1, messageSize, rate);
                 }
@@ -107,7 +122,7 @@
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
-            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString()+ "k msg/s" : "flood\t")}\t{messageSize} B\t{publishers} pub\t{subscribers} sub\t:\t");
+            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString("00")+ "k msg/s" : "flood\t")}\t{messageSize} B\t{publishers} pub\t{subscribers} sub\t:\t");
 
             var options = new NatsDefaultOptions();
 
@@ -173,11 +188,12 @@
             }
             else if (subscribers > 1)
             {
+                readers.Add(ReaderText(readerConnection, subject, readerCts.Token));
+
                 foreach (var i in Enumerable.Range(0, subscribers - 1))
                 {
                     readers.Add(ReaderText(readerConnection, $"{subject}_{i}", readerCts.Token));
                 }
-                readers.Add(ReaderText(readerConnection, subject, readerCts.Token));
             }
 
             double messagesPerSecond = 0;
@@ -215,7 +231,7 @@
                 bytesPerSecond= totalBytes / totalSecondsElapsed;
 
                 await Task.WhenAll(readers);
-                latencyMean = readers.First().Result.sum / Math.Max(1, readers.First().Result.count);
+                latencyMean = (double)readers.First().Result.sum / Math.Max(1, readers.First().Result.count);
                 latencyMax = readers.First().Result.max;
                 latencyMin = readers.First().Result.min;
 
@@ -239,9 +255,6 @@
                 var sw = Stopwatch.StartNew();
 
                 await Task.Delay(TimeSpan.FromSeconds(10));
-
-                //while (writerConnection.TransmitMessagesTotal < 10_000_000)
-                //    await Task.Delay(250);
 
                 writerCts.Cancel();
 
@@ -276,7 +289,10 @@
 
                 var batch = msgPerSecond >= 500_000 ? 100 : msgPerSecond>=100_000?10:1;
                 var delay = msgPerSecond > 0 ? (long)(Stopwatch.Frequency * batch / msgPerSecond) : 0;
-                var adjustment = 0L;
+
+                var targetPerMessage = delay / batch;
+                
+                var messageCount = 0;
 
                 var initialRandomDelay = Random.Shared.Next(0, 10);
 
@@ -284,27 +300,37 @@
 
                 NatsKey subjectUtf8 = new NatsKey(subject);
 
+                var start = Stopwatch.GetTimestamp();
+
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     var now = Stopwatch.GetTimestamp();
-                    BitConverter.TryWriteBytes(message, Stopwatch.GetTimestamp());
 
                     for (var i = batch-1; i >= 0; i--)
-                    {                        
+                    {
+                        BitConverter.TryWriteBytes(message, Stopwatch.GetTimestamp());
                         await connection.PublishAsync(subjectUtf8, message, cancellationToken: CancellationToken.None);                        
                     }
+                    messageCount += batch;
 
                     if (delay ==0) continue;
 
                     var elapsed = Stopwatch.GetTimestamp() - now;
 
-                    var target = delay + adjustment;
-                    while (elapsed< target)
+                    var perMessage = (Stopwatch.GetTimestamp() - start) / messageCount;
+
+                    while(perMessage < targetPerMessage)
                     {
-                        await Task.Yield();
-                        elapsed = Stopwatch.GetTimestamp() - now;                    
+                        var wait = (targetPerMessage - perMessage) * messageCount;
+                        var waitMs = (double)wait *1000/ Stopwatch.Frequency;
+
+                        if (waitMs >= 1)
+                            await Task.Delay((int)waitMs);
+                        else
+                            break; //let speed up
+
+                        perMessage = (Stopwatch.GetTimestamp() - start) / messageCount;
                     }
-                    adjustment = (long)((delay-elapsed));
                 }
             }
 
@@ -359,8 +385,7 @@
                             sum += rtt;                            
                             max = Math.Max(rtt, max);
                             min = Math.Min(rtt, min);
-                        }                        
-
+                        }
                     }
                 }
                 catch(OperationCanceledException)
