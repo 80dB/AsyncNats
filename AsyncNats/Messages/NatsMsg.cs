@@ -6,6 +6,7 @@
     using System.Net;
     using System.Reflection;
     using System.Runtime.CompilerServices;
+    using System.Runtime.InteropServices;
     using System.Security.Cryptography;
     using System.Text;
     using System.Threading;
@@ -15,7 +16,7 @@
     {
         private static readonly byte[] _empty = new byte[0];
         private int _referenceCounter;
-        private IMemoryOwner<byte>? _rentedPayload;
+        private NatsMemoryPool.NatsMemoryOwner? _rentedPayload;
 
 
         public readonly NatsKey Subject;
@@ -53,7 +54,7 @@
             _referenceCounter = -1;
         }
 
-        public NatsMsg(in NatsKey subject, in long subscriptionId, in NatsKey replyTo, ReadOnlyMemory<byte> payload, ReadOnlyMemory<byte> headers, IMemoryOwner<byte> rentedPayload)
+        public NatsMsg(in NatsKey subject, in long subscriptionId, in NatsKey replyTo, ReadOnlyMemory<byte> payload, ReadOnlyMemory<byte> headers,in NatsMemoryPool.NatsMemoryOwner rentedPayload)
         {
             Subject = subject;
             SubscriptionId = subscriptionId;
@@ -94,12 +95,15 @@
             var payloadSize = 0;
             var pointer = line.Length - 1;
 
+            ref byte lineRef= ref MemoryMarshal.GetReference(line);
+            byte currentByte = Unsafe.Add(ref lineRef, pointer);
             do
-            {
-                payloadSize += (line[pointer] - '0') * multiplier;
+            {                
+                payloadSize += (currentByte - '0') * multiplier;
                 multiplier *= 10;
                 pointer--;
-            } while (line[pointer] != ' ');
+                currentByte = Unsafe.Add(ref lineRef, pointer);
+            } while (currentByte != ' ');
 
             var payloadSizeStart = pointer;
             pointer--;
@@ -150,12 +154,14 @@
                 //sid
                 pointer = payloadSizeStart - 1;
                 multiplier = 1;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
                 do
                 {
-                    sid += (line[pointer] - '0') * multiplier;
+                    sid += (currentByte - '0') * multiplier;
                     multiplier *= 10;
                     pointer--;
-                } while (line[pointer] != ' ');
+                    currentByte = Unsafe.Add(ref lineRef, pointer);
+                } while (currentByte != ' ');
 
                 subject = new NatsKey(copyMemory.Slice(4, splits[0] - 4));
             }
@@ -166,12 +172,14 @@
                 //sid
                 pointer = splits[0] - 1;
                 multiplier = 1;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
                 do
                 {
-                    sid += (line[pointer] - '0') * multiplier;
+                    sid += (currentByte - '0') * multiplier;
                     multiplier *= 10;
                     pointer--;
-                } while (line[pointer] != ' ');
+                    currentByte = Unsafe.Add(ref lineRef, pointer);
+                } while (currentByte != ' ');
 
                 subject = new NatsKey(copyMemory.Slice(4, splits[1] - 4));
             }
@@ -188,28 +196,36 @@
             //parse total size
             var multiplier = 1;
             var totalSize = 0;
-            var totalSizeStart = line.Length - 1;
+            var pointer = line.Length - 1;
+
+            ref byte lineRef = ref MemoryMarshal.GetReference(line);
+            byte currentByte = Unsafe.Add(ref lineRef, pointer);
             do
             {
-                totalSize += (line[totalSizeStart] - '0') * multiplier;
+                totalSize += (currentByte - '0') * multiplier;
                 multiplier *= 10;
-                totalSizeStart--;
-            } while (line[totalSizeStart] != ' ');
+                pointer--;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
+            } while (currentByte != ' ');
+
+            pointer--;
 
             //parse header size
             multiplier = 1;
             var headerSize = 0;
-            var headerSizeStart = totalSizeStart - 1;
+            var headerSizeStart = pointer;
+            currentByte = Unsafe.Add(ref lineRef, pointer);
             do
             {
-                headerSize += (line[headerSizeStart] - '0') * multiplier;
+                headerSize += (currentByte - '0') * multiplier;
                 multiplier *= 10;
-                headerSizeStart--;
-            } while (line[headerSizeStart] != ' ');
+                pointer--;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
+            } while (currentByte != ' ');
 
 
-            var pointer = headerSizeStart - 1;
-
+            pointer--;
+            var headerSizeEnd = pointer; 
 
             Span<int> splits = stackalloc int[3];
             var splitCount = 0;
@@ -260,30 +276,34 @@
             if (splitCount == 1)
             {
                 //sid
-                pointer = headerSizeStart - 1;
+                pointer = headerSizeEnd;
                 multiplier = 1;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
                 do
                 {
-                    sid += (line[pointer] - '0') * multiplier;
+                    sid += (currentByte - '0') * multiplier;
                     multiplier *= 10;
                     pointer--;
-                } while (line[pointer] != ' ');
+                    currentByte = Unsafe.Add(ref lineRef, pointer);
+                } while (currentByte != ' ');
 
                 subject = new NatsKey(copyMemory.Slice(5, splits[0] - 5));
             }
             else
             {
-                replyTo = new NatsKey(copyMemory.Slice(splits[0] + 1, headerSizeStart - splits[0] - 1));
+                replyTo = new NatsKey(copyMemory.Slice(splits[0] + 1, headerSizeEnd - splits[0]));
 
                 //sid
                 pointer = splits[0] - 1;
                 multiplier = 1;
+                currentByte = Unsafe.Add(ref lineRef, pointer);
                 do
                 {
-                    sid += (line[pointer] - '0') * multiplier;
+                    sid += (currentByte - '0') * multiplier;
                     multiplier *= 10;
                     pointer--;
-                } while (line[pointer] != ' ');
+                    currentByte = Unsafe.Add(ref lineRef, pointer);
+                } while (currentByte != ' ');
 
                 subject = new NatsKey(copyMemory.Slice(5, splits[1] - 5));
             }
