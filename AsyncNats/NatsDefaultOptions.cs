@@ -42,5 +42,7 @@ namespace EightyDecibel.AsyncNats
         public string RequestPrefix { get; set; }
 
         public ILoggerFactory? LoggerFactory { get; set; }
+
+        public bool LatencyMode { get; set; }
     }
 }

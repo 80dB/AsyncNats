@@ -36,7 +36,8 @@
         private CancellationTokenSource? _disconnectSource;
         private ReadOnlyMemory<byte> _reconnectResendBuffer = ReadOnlyMemory<byte>.Empty;
 
-        private readonly Channel<IMemoryOwner<byte>> _senderChannel;
+        //private readonly Channel<NatsMemoryOwner> _senderChannel;
+        private readonly NatsPublishChannel _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
         private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
@@ -114,16 +115,9 @@
 
             _memoryPool = new NatsMemoryPool(options.ArrayPool);
 
-            _senderChannel = Channel.CreateBounded<IMemoryOwner<byte>>(
-                new BoundedChannelOptions(options.SenderQueueLength)
-                {
-                    SingleReader = true,
-                    SingleWriter = false,
-                    AllowSynchronousContinuations=true
-                });
-            
-            
             _disposeTokenSource = new CancellationTokenSource();
+
+            _senderChannel = new NatsPublishChannel(_memoryPool,_disposeTokenSource.Token);    
 
             _requestResponse = new NatsRequestResponse(this);
 
@@ -160,6 +154,8 @@
 
                 using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                 socket.NoDelay = true;
+
+                _senderChannel.DefaultBufferLength = socket.SendBufferSize;
 
                 using var internalDisconnect = new CancellationTokenSource();
 
@@ -287,7 +283,7 @@
                                 }
                                 break;
                             case NatsPing _:
-                                await WriteAsync(NatsPong.RentedSerialize(_memoryPool), disconnectToken);
+                                await WriteAsync(NatsPong.Instance, disconnectToken);
                                 break;
 
                             case NatsInformation info:
@@ -307,9 +303,7 @@
         {
             _logger?.LogTrace("Starting WriteSocketAsync loop");
 
-            ChannelReader<IMemoryOwner<byte>> reader = _senderChannel.Reader;
-            byte[] buffer = new byte[socket.SendBufferSize];
-            var bufferLength = buffer.Length;
+            ChannelReader<NatsPublishBuffer> reader = _senderChannel.Reader;
 
             await SendConnect(socket, disconnectToken);
             await Resubscribe(socket, disconnectToken);
@@ -322,45 +316,27 @@
             }
 
             while (!disconnectToken.IsCancellationRequested)
-            {                
-                var position = 0;
-                var result = await reader.ReadAsync(disconnectToken);
+            {          
+                
+                await foreach(var chunk in reader.ReadAllAsync(disconnectToken))
+                {
+                    await chunk.Commit();
 
-                do
-                {                   
-                    var consumed = result.Memory.Length;
-                    Interlocked.Add(ref _senderQueueSize, -consumed);
-
-                    if (position > 0 && (position + consumed > bufferLength || consumed > bufferLength))
-                    {                        
-                        await SocketSend(buffer.AsMemory(0, position));
-
-                        Interlocked.Add(ref _transmitBytesTotal, position);
-                        position = 0;
-                    }
-
-                    if (reader.Count == 0 || consumed > bufferLength)
-                    {                        
-                        await SocketSend(result.Memory);
-
-                        Interlocked.Add(ref _transmitBytesTotal, result.Memory.Length);
-                    }
-                    else
+                    if (chunk.Messages > 0)
                     {
-                        result.Memory.CopyTo(buffer.AsMemory(position));
-                        position += consumed;
+                        var memory = chunk.GetMemory();
+
+                        Interlocked.Add(ref _senderQueueSize, -memory.Length);
+
+                        await SocketSend(memory);
+
+                        Interlocked.Add(ref _transmitMessagesTotal, chunk.Messages);
+                        Interlocked.Add(ref _transmitBytesTotal, memory.Length);
                     }
 
-                    result.Dispose();
-                    Interlocked.Increment(ref _transmitMessagesTotal);
-                    
-                } while (reader.TryRead(out result));
-
-                if (position == 0) continue;
-
-                await SocketSend(buffer.AsMemory(0, position));
-
-                Interlocked.Add(ref _transmitBytesTotal, position);
+                    _senderChannel.Return(chunk);
+                }
+            
             }
 
             _logger?.LogTrace("Exited WriteSocketAsync loop");
@@ -372,7 +348,7 @@
                 int sent = 0;
                 try
                 {
-                    sent = await socket.SendAsync(data, SocketFlags.None, disconnectToken);
+                    sent = await socket.SendAsync(data, SocketFlags.None, CancellationToken.None);
 
                     //it seems there's no chance sent can be < data length for send success
                     return sent;
@@ -399,8 +375,8 @@
         private async Task SendConnect(Socket socket, CancellationToken disconnectToken)
         {
             var connect = new NatsConnect(Options);
-            using var buffer = NatsConnect.RentedSerialize(_memoryPool, connect);
-            await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
+            var buffer = NatsConnect.Serialize(connect);
+            await socket.SendAsync(buffer, SocketFlags.None, disconnectToken);
         }
 
         private async Task Resubscribe(Socket socket, CancellationToken disconnectToken)
@@ -409,17 +385,21 @@
             {
                 _logger?.LogTrace("Resubscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
 
-                using var buffer = NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
-                await socket.SendAsync(buffer.Memory, SocketFlags.None, disconnectToken);
-                Interlocked.Add(ref _transmitBytesTotal, buffer.Memory.Length);
+                var sub = new NatsSub(subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
+                var buffer =new byte[sub.Length];
+                sub.Serialize(buffer);
+
+                await socket.SendAsync(buffer, SocketFlags.None, disconnectToken);
+
+                Interlocked.Add(ref _transmitBytesTotal, buffer.Length);
             }
         }
 
-        private ValueTask WriteAsync(IMemoryOwner<byte> buffer, CancellationToken cancellationToken)
+        private ValueTask WriteAsync<T>(in T message, CancellationToken cancellationToken) where T: INatsClientMessage
         {
-            Interlocked.Add(ref _senderQueueSize, buffer.Memory.Length);
+            Interlocked.Add(ref _senderQueueSize, message.Length);
 
-            return _senderChannel.Writer.WriteAsync(buffer, cancellationToken);
+            return _senderChannel.Publish(message.Length, message.Serialize, cancellationToken);
         }
 
         public async ValueTask DisconnectAsync()
@@ -461,20 +441,25 @@
             return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo, headers, cancellationToken);
         }
 
-        public async ValueTask PublishAsync(NatsKey subject, NatsPayload? payload = null, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
+        public ValueTask PublishAsync(in NatsKey subject, in NatsPayload? payload = null, in NatsKey? replyTo = null, in NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
-            var pub = headers == null
-                ? NatsPub.RentedSerialize(_memoryPool, subject, replyTo ?? NatsKey.Empty, payload ?? NatsPayload.Empty)
-                : NatsHPub.RentedSerialize(_memoryPool, subject, replyTo ?? NatsKey.Empty, headers ?? NatsMsgHeaders.Empty, payload ?? NatsPayload.Empty);
-
-            await WriteAsync(pub, cancellationToken);
+            if(headers == null)
+            {
+                return WriteAsync(new NatsPub(subject, replyTo ?? NatsKey.Empty, payload ?? NatsPayload.Empty),cancellationToken);
+            }
+            else
+            {
+                return WriteAsync(new NatsHPub(subject, replyTo ?? NatsKey.Empty, headers.Value, payload ?? NatsPayload.Empty), cancellationToken);
+            }
         }
 
 #if !DISABLE_PUBLISH_RAW
-        public async ValueTask PublishRaw(ReadOnlyMemory<byte> rawData,int messageCount, CancellationToken cancellationToken)
+        public async ValueTask PublishRaw(byte[] rawData, int position, int messageCount, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
-            await WriteAsync(new NoOwner<byte>(rawData,()=>tcs.SetResult(true)), cancellationToken);
+            var natsBuffer = new NatsPublishBuffer(rawData, position, messageCount);
+            natsBuffer.OnCommit += () => tcs.SetResult(true);
+            await _senderChannel.Writer.WriteAsync(natsBuffer, cancellationToken);
             await tcs.Task;
             Interlocked.Add(ref _transmitMessagesTotal, messageCount);
         }
@@ -484,14 +469,14 @@
         {
             _logger?.LogTrace("Subscribing to {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
 
-            return WriteAsync(NatsSub.RentedSerialize(_memoryPool, subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId), cancellationToken);
+            return WriteAsync(new NatsSub(subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId), cancellationToken);
         }
 
         private ValueTask SendUnsubscribe(Subscription subscription)
         {
             _logger?.LogTrace("Unsubscribing from {Subject} / {QueueGroup} / {SubscriptionId}", subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId);
 
-            return WriteAsync(NatsUnsub.RentedSerialize(_memoryPool, subscription.SubscriptionId, null), CancellationToken.None);
+            return WriteAsync(new NatsUnsub( subscription.SubscriptionId, null), CancellationToken.None);
         }
 
         private async IAsyncEnumerable<NatsMsg> InternalSubscribe(NatsKey subject, NatsKey? queueGroup, [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -559,15 +544,16 @@
         /// <param name="queueGroup"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {                        
+        public async IAsyncEnumerable<NatsMsg> SubscribeUnsafe(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation]  CancellationToken cancellationToken = default)
+        {
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))
             {
                 try
                 {
                     yield return msg;
                 }
-                finally{
+                finally
+                {
                     msg.Release();
                 }
             }

@@ -48,6 +48,10 @@
         [JsonPropertyName("headers")]
         public bool Headers { get; set; } = true;
 
+
+       
+
+
         public NatsConnect()
         {
             Version = GetType().Assembly.GetName().Version.ToString();
@@ -63,17 +67,18 @@
             Password = options.Password;
 
             Echo = options.Echo;
+
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, NatsConnect msg)
+        public static ReadOnlyMemory<byte> Serialize(NatsConnect msg)
         {
             var serialized = JsonSerializer.SerializeToUtf8Bytes(msg, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             var hint = _command.Length +
                        serialized.Length +
                        _end.Length;
 
-            var rented = pool.Rent(hint);
-            var buffer = rented.Memory;
+            var rented = new byte[hint];
+            var buffer = rented.AsMemory();
             _command.CopyTo(buffer);
             var consumed = _command.Length;
 
@@ -83,5 +88,7 @@
             _end.CopyTo(buffer.Slice(consumed));
             return rented;
         }
+
+        
     }
 }

@@ -16,7 +16,7 @@
     {
         private static readonly byte[] _empty = new byte[0];
         private int _referenceCounter;
-        private NatsMemoryPool.NatsMemoryOwner? _rentedPayload;
+        private NatsMemoryOwner? _rentedPayload;
 
 
         public readonly NatsKey Subject;
@@ -54,7 +54,7 @@
             _referenceCounter = -1;
         }
 
-        public NatsMsg(in NatsKey subject, in long subscriptionId, in NatsKey replyTo, ReadOnlyMemory<byte> payload, ReadOnlyMemory<byte> headers,in NatsMemoryPool.NatsMemoryOwner rentedPayload)
+        public NatsMsg(in NatsKey subject, in long subscriptionId, in NatsKey replyTo, ReadOnlyMemory<byte> payload, ReadOnlyMemory<byte> headers,in NatsMemoryOwner rentedPayload)
         {
             Subject = subject;
             SubscriptionId = subscriptionId;
@@ -77,7 +77,7 @@
         {
             if (Interlocked.Decrement(ref _referenceCounter) == 0)
             {
-                _rentedPayload?.Dispose();
+                _rentedPayload?.Return();
                 _rentedPayload = null;
             }
         }
@@ -96,9 +96,9 @@
             var pointer = line.Length - 1;
 
             ref byte lineRef= ref MemoryMarshal.GetReference(line);
-            byte currentByte = Unsafe.Add(ref lineRef, pointer);
+            byte currentByte = Unsafe.Add(ref MemoryMarshal.GetReference(line), pointer);
             do
-            {                
+            {
                 payloadSize += (currentByte - '0') * multiplier;
                 multiplier *= 10;
                 pointer--;
@@ -187,8 +187,6 @@
             return new NatsMsg(subject, sid, replyTo, payload, ReadOnlyMemory<byte>.Empty, copyRented);
 
         }
-
-
 
         public static INatsServerMessage? ParseMessageWithHeader(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {

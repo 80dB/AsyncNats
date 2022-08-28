@@ -22,24 +22,24 @@ namespace AsyncNats.Tests.Messages
         [Fact]
         public void EndWithCRLF()
         {
-            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsConnect.Serialize(_connect);
+            var text = Encoding.UTF8.GetString(rented.Span);
             Assert.EndsWith("\r\n", text);
         }
 
         [Fact]
         public void StartWithConnect()
         {
-            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsConnect.Serialize(_connect);
+            var text = Encoding.UTF8.GetString(rented.Span);
             Assert.StartsWith("CONNECT", text);
         }
 
         [Fact]
         public void BeSame()
         {
-            using var rented = NatsConnect.RentedSerialize(new NatsMemoryPool(), _connect);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsConnect.Serialize(_connect);
+            var text = Encoding.UTF8.GetString(rented.Span);
 
             text = text.Replace("CONNECT ", "");
             text = text.Replace("\r\n", "");

@@ -22,20 +22,66 @@
            
             var messageSizes = new[] { 0,8, 16, 32, 64, 128, 256, 512, 1024 };
 
+            //args = new[] { "writer","32", "benchmark" };
+            if (args.Length>0 && args[0] == "writer")
+            {
+                var messageSize = 32;
+                if (args.Length > 1)
+                    int.TryParse(args[1], out messageSize);
+
+                string subject = null;
+                if (args.Length > 2)
+                    subject = args[2];
+
+                var exit = false;
+                _ = Task.Run(async () => {
+                    while (!exit)
+                    {
+                        await RunBenchmark(1, 0, messageSize, 0, false,subject: subject);
+                    }
+                   
+                });
+
+                Console.ReadKey();
+                exit = true;
+                return;
+            }
+
+            //args = new[] { "reader","benchmark" };
+            if (args.Length > 0 && args[0] == "reader")
+            {
+                string subject = null;
+                if (args.Length > 1)
+                    subject = args[1];
+
+                var exit = false;
+                _ = Task.Run(async () => {
+                    while (!exit)
+                    {
+                        await RunBenchmark(0, 1, 0, 0, false, subject: subject);
+                    }
+
+                });
+
+                Console.ReadKey();
+                exit = true;
+                return;
+            }
 
             Console.WriteLine();
 
-
+            //goto skip;
+        
             //This first test sends a precomputed large buffer of 100mb 
             //It should get us a figure close to what NATS can ingest and drop
             Console.WriteLine("---Publish only ( raw )---");
             foreach (var messageSize in messageSizes)
             {
-                await RunBenchmark(1, 0, messageSize, 0,false);
+                await RunBenchmark(4, 0, messageSize, 0,false);
             }
             Console.WriteLine();
-        
 
+        
             //Here we try to flood NATS but using the normal publish path, generating each message on the fly
             //This gives us an rough idea of the publish path overhead 
             Console.WriteLine("---Publish only ( generate ) 1 pub---");
@@ -55,25 +101,25 @@
             }
             Console.WriteLine();
 
-
+        
             //Here we try to flood NATS with one processing subscription.
             //It should give us an idea of the read path overhead            
             Console.WriteLine("---Roundtrip raw pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                await RunBenchmark(1, 1, messageSize, 0, false);
+                await RunBenchmark(4, 1, messageSize, 0, false);
             }
             Console.WriteLine();
 
 
 
-
+        
             //Here we target a specific message/sec target rate at the writer task
             messageSizes = new[] { 8, 32, 128, 512, 1024 };
             Console.WriteLine("---Roundtrip 1 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 1_000,10_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 1_000, 10_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000, 1_500_000, 2_000_000, 2_500_000, 3_000_000 })
                 {
                     await RunBenchmark(1, 1, messageSize, rate);
                 }
@@ -96,14 +142,14 @@
             Console.WriteLine();
 
 
-        
+        //skip:
             messageSizes = new[] { 8, 16, 32, 64, 128, 256, 512, 1024 };
 
             //Here publishing and generating messages from 100 different tasks
             Console.WriteLine("---Roundtrip 100 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                foreach (var rate in new[] { 1000, 10_000,50_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000})
+                foreach (var rate in new[] { 1000, 10_000,50_000, 100_000, 500_000, 750_000, 1_000_000, 1_250_000, 1_500_000, 2_000_000 })
                 {
                     await RunBenchmark(100, 1, messageSize, rate);
                 }
@@ -117,12 +163,13 @@
         }
 
 
-        static async Task RunBenchmark(int publishers,int subscribers,int messageSize,int msgPerSecond,bool writerGenerate=true)
+        static async Task RunBenchmark(int publishers,int subscribers,int messageSize,int msgPerSecond,bool writerGenerate=true,TimeSpan? duration=null,string subject=null)
         {
+            duration = duration ?? TimeSpan.FromSeconds(15);
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
-            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString("00")+ "k msg/s" : "flood\t")}\t{messageSize} B\t{publishers} pub\t{subscribers} sub\t:\t");
+            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString("0000")+ "k msg/s" : "flood\t")}\t{messageSize} B\t{publishers} pub\t{subscribers} sub\t:\t");
 
             var options = new NatsDefaultOptions();
 
@@ -163,9 +210,9 @@
 
 
             List<Task> writers = new List<Task>();
-            List<Task<(long count, long sum, long max, long min)>> readers = new List<Task<(long count, long sum, long max, long min)>>();
+            List<Task<(long count, long sum, long max, long min, double mean)>> readers = new List<Task<(long count, long sum, long max, long min,double mean)>>();
 
-            var subject = Guid.NewGuid().ToString().Split('-')[0];
+            subject = subject?? Guid.NewGuid().ToString().Split('-')[0];
 
             if(!writerGenerate)
             {
@@ -208,7 +255,7 @@
                 
                 var sw = Stopwatch.StartNew();
                                 
-                await Task.Delay(TimeSpan.FromSeconds(10));
+                await Task.Delay(duration.Value);
 
                 writerCts.Cancel(); //stop writing
 
@@ -231,7 +278,7 @@
                 bytesPerSecond= totalBytes / totalSecondsElapsed;
 
                 await Task.WhenAll(readers);
-                latencyMean = (double)readers.First().Result.sum / Math.Max(1, readers.First().Result.count);
+                latencyMean = (double)readers.First().Result.mean;
                 latencyMax = readers.First().Result.max;
                 latencyMin = readers.First().Result.min;
 
@@ -305,12 +352,12 @@
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     var now = Stopwatch.GetTimestamp();
-
-                    for (var i = batch-1; i >= 0; i--)
+                    for (var i = batch - 1; i >= 0; i--)
                     {
                         BitConverter.TryWriteBytes(message, Stopwatch.GetTimestamp());
-                        await connection.PublishAsync(subjectUtf8, message, cancellationToken: CancellationToken.None);                        
+                        await connection.PublishAsync(subjectUtf8, message, cancellationToken: CancellationToken.None);
                     }
+
                     messageCount += batch;
 
                     if (delay ==0) continue;
@@ -339,29 +386,30 @@
                 await Task.Yield();
 
                 var payload = new byte[messageSize];
-                var message = NatsPub.RentedSerialize(new NatsMemoryPool(), subject, NatsKey.Empty, payload);
+                var message = NatsPub.Serialize(subject, NatsKey.Empty, payload);
 
-                var bufferSize = 64*1024 * 1024;
-                var buffer = new byte[bufferSize].AsMemory(); //hold 1M messages               
+                var bufferSize = 1024 * 64;
+                var byteArray = new byte[bufferSize];
+                var memory = byteArray.AsMemory(); //hold 1M messages               
 
                 var filled = 0;
                 var messageCount = 0;
-                while (filled + message.Memory.Length < bufferSize)
+                while (filled + message.Length < bufferSize)
                 {
-                    message.Memory.Span.CopyTo(buffer.Span.Slice(filled));
-                    filled += message.Memory.Span.Length;
+                    message.Span.CopyTo(memory.Span.Slice(filled));
+                    filled += message.Span.Length;
                     messageCount++;
                 }
-                buffer = buffer.Slice(0, filled);
+                memory = memory.Slice(0, filled);
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    await connection.PublishRaw(buffer, messageCount, CancellationToken.None);
+                    await connection.PublishRaw(byteArray,filled, messageCount, CancellationToken.None);
                 }
 
             }
 
-            async Task<(long count,long sum,long max,long min)> ReaderText(NatsConnection connection, string subject,CancellationToken cancellationToken)
+            async Task<(long count,long sum,long max,long min,double mean)> ReaderText(NatsConnection connection, string subject,CancellationToken cancellationToken)
             {
 
                 await Task.Yield();
@@ -370,30 +418,36 @@
                 long sum = 0;
                 long max = 0;
                 long min = long.MaxValue;
+                double mean = 0.0;
 
                 try
                 {
                     await foreach (var message in connection.SubscribeUnsafe(subject, cancellationToken: cancellationToken))
                     {
                         count++;
-                        if (message.Payload.Length > 0)
+                        var payload = message.Payload;
+                        if (payload.Length > 0)
                         {
-                            var timestamp = BitConverter.ToInt64(message.Payload.Span);
+                            var timestamp = BitConverter.ToInt64(payload.Span);
 
                             var now = Stopwatch.GetTimestamp();
                             var rtt = (now - timestamp);
-                            sum += rtt;                            
+
+                            mean += (rtt - mean) / (double)count;
+
+                            sum += rtt;
                             max = Math.Max(rtt, max);
                             min = Math.Min(rtt, min);
                         }
                     }
+
                 }
                 catch(OperationCanceledException)
                 {
                     //swallow
                 }
 
-                return (count,sum, max, min);
+                return (count,sum, max, min,mean);
 
             }
         }
