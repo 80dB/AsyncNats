@@ -399,7 +399,7 @@
         {
             Interlocked.Add(ref _senderQueueSize, message.Length);
 
-            return _senderChannel.Publish(message.Length, message.Serialize, cancellationToken);
+            return _senderChannel.Publish(message, cancellationToken);
         }
 
         public async ValueTask DisconnectAsync()

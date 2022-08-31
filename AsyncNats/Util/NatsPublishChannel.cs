@@ -1,5 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
+    using EightyDecibel.AsyncNats.Messages;
     using System;
     using System.Collections.Concurrent;
     using System.Threading;
@@ -34,7 +35,7 @@
         readonly object _lock = new object();
         
 
-        readonly ConcurrentStack<NatsPublishBuffer> _pool = new ConcurrentStack<NatsPublishBuffer>();
+        readonly ConcurrentBag<NatsPublishBuffer> _pool = new ConcurrentBag<NatsPublishBuffer>();
 
         NatsPublishBuffer _current;
         int _version = 0;
@@ -50,6 +51,11 @@
         public ValueTask Publish(int serializedLength, SerializeDelegate del,CancellationToken cancellationToken)
         {
             return PublishInternal(serializedLength, del, cancellationToken);
+        }
+
+        public ValueTask Publish<T>(T msg, CancellationToken cancellationToken) where T:INatsClientMessage
+        {
+            return PublishInternal(msg, cancellationToken);
         }
 
         public async ValueTask PublishInternal(int serializedLength, SerializeDelegate del, CancellationToken cancellationToken)
@@ -87,11 +93,47 @@
             
         }
 
+        public async ValueTask PublishInternal<T>(T msg, CancellationToken cancellationToken) where T : INatsClientMessage
+        {
+
+        retry:
+            var current = _current;
+            var currentVersion = _version;
+
+            if (!current.TryWrite(msg, out var messageIndex))
+            {
+                await _channel.Writer.WaitToWriteAsync();
+
+                lock (_lock)
+                {
+                    if (currentVersion == _version)
+                    {
+                        current = GetBuffer(msg.Length);
+                        current.Reset();
+                        _current = current;
+                        _version++;
+                    }
+                }
+
+                goto retry;
+            }
+
+            //at this point message was written
+
+            if (messageIndex == 0)
+            {
+                //if wrote first message on buffer, enqueue
+                await _channel.Writer.WriteAsync(current, cancellationToken);
+            }
+
+        }
+
+
         public void Return(NatsPublishBuffer buffer)
         {
             if (!buffer.IsDetached && _pool.Count < Environment.ProcessorCount)
             {                
-                _pool.Push(buffer);
+                _pool.Add(buffer);
             }
             else
             {
@@ -107,7 +149,7 @@
                 return new NatsPublishBuffer(_natsMemoryPool.RentBuffer(minimumSize.Value), detached: true);
             }
 
-            if(!_pool.TryPop(out var buffer))
+            if(!_pool.TryTake(out var buffer))
                 buffer= new NatsPublishBuffer(_natsMemoryPool.RentBuffer(bufferLength), bufferLength, detached: false);
 
             return buffer;

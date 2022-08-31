@@ -1,5 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
+    using EightyDecibel.AsyncNats.Messages;
     using System;
     using System.Threading;
     using System.Threading.Tasks;
@@ -72,6 +73,30 @@
             return true;
         }
 
+        public bool TryWrite<T>(T msg, out int messageIndex) where T:INatsClientMessage
+        {
+            messageIndex = -1;
+            int start;
+            lock (_lock)
+            {
+                if ((_length - _position) < msg.Length || _commit) return false;
+
+                Interlocked.Increment(ref _writers);
+
+                //get a slot
+                start = _position;
+                _position += msg.Length;
+                messageIndex = _messages;
+                _messages++;
+            }
+
+            var writeSlot = _buffer.AsSpan().Slice(start, msg.Length);
+
+            msg.Serialize(writeSlot);
+            Interlocked.Decrement(ref _writers);
+            return true;
+        }
+
 
         public async ValueTask Commit()
         {
@@ -84,12 +109,16 @@
             if(commited)
                 OnCommit?.Invoke();
 
-            if (_writers == 0) return;
-
-            SpinWait.SpinUntil(() => _writers == 0, 1);
+            var count = 2048;
+            while (_writers > 0 && count>=0)
+            {
+                count--;
+            }
 
             while (_writers > 0)
+            {
                 await Task.Yield();
+            }
         }
         
         public void Reset()
