@@ -1,6 +1,7 @@
 ﻿namespace SimpleBenchmark
 {
     using System;
+    using System.Buffers;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Diagnostics.Metrics;
@@ -81,7 +82,7 @@
             }
             Console.WriteLine();
 
-        
+        //skip:
             //Here we try to flood NATS but using the normal publish path, generating each message on the fly
             //This gives us an rough idea of the publish path overhead 
             Console.WriteLine("---Publish only ( generate ) 1 pub---");
@@ -107,11 +108,12 @@
             Console.WriteLine("---Roundtrip raw pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                await RunBenchmark(4, 1, messageSize, 0, false);
+                await RunBenchmark(4, 1, messageSize, 0,writerGenerate: false, readerType:ReaderType.Normal);
+                await RunBenchmark(4, 1, messageSize, 0, writerGenerate: false, readerType: ReaderType.Unsafe);
+                await RunBenchmark(4, 1, messageSize, 0, writerGenerate: false, readerType: ReaderType.Inline);
+                Console.WriteLine();
             }
             Console.WriteLine();
-
-
 
         
             //Here we target a specific message/sec target rate at the writer task
@@ -142,7 +144,7 @@
             Console.WriteLine();
 
 
-        //skip:
+        
             messageSizes = new[] { 8, 16, 32, 64, 128, 256, 512, 1024 };
 
             //Here publishing and generating messages from 100 different tasks
@@ -162,14 +164,24 @@
             Console.ReadKey();
         }
 
-
-        static async Task RunBenchmark(int publishers,int subscribers,int messageSize,int msgPerSecond,bool writerGenerate=true,TimeSpan? duration=null,string subject=null)
+        static async Task RunBenchmark(int publishers, int subscribers, int messageSize, int msgPerSecond, bool writerGenerate = true, ReaderType readerType = ReaderType.Inline, TimeSpan? duration = null, string subject = null)
+        {
+            try
+            {
+                await RunBenchmarkInner(publishers, subscribers, messageSize, msgPerSecond, writerGenerate, readerType);        
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+        }
+        static async Task RunBenchmarkInner(int publishers,int subscribers,int messageSize,int msgPerSecond,bool writerGenerate=true,ReaderType readerType= ReaderType.Inline, TimeSpan? duration=null,string subject=null)
         {
             duration = duration ?? TimeSpan.FromSeconds(15);
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
-            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString("0000")+ "k msg/s" : "flood\t")}\t{messageSize} B\t{publishers} pub\t{subscribers} sub\t:\t");
+            Console.Write($"Target {(msgPerSecond>0?(msgPerSecond / 1000).ToString("0000")+ "k msg/s" : "flood\t")} ({readerType})\t{messageSize} B\t{publishers} pub\t{subscribers} sub : ");
 
             var options = new NatsDefaultOptions();
 
@@ -231,15 +243,15 @@
 
             if (subscribers == 1)
             {
-                readers.Add(ReaderText(readerConnection, subject, readerCts.Token));
+                readers.Add(ReaderText(readerConnection, subject, readerType, readerCts.Token));
             }
             else if (subscribers > 1)
             {
-                readers.Add(ReaderText(readerConnection, subject, readerCts.Token));
+                readers.Add(ReaderText(readerConnection, subject, readerType, readerCts.Token));
 
                 foreach (var i in Enumerable.Range(0, subscribers - 1))
                 {
-                    readers.Add(ReaderText(readerConnection, $"{subject}_{i}", readerCts.Token));
+                    readers.Add(ReaderText(readerConnection, $"{subject}_{i}", readerType, readerCts.Token));
                 }
             }
 
@@ -318,7 +330,7 @@
                 bytesPerSecond = totalBytes / totalSecondsElapsed;
             }
 
-            Console.Write($"{messagesPerSecond / 1000:f1}k msg/s\t{bytesPerSecond / 1000_0000:f2} MB/s Latency: {latencyMean:f2}ms {latencyMax:f2}ms {latencyMin:f2}ms");
+            Console.Write($"{messagesPerSecond / 1000:f1}k msg/s\t{bytesPerSecond / 1000_0000:f2} MB/s Lat: {latencyMean:f2}ms {latencyMax:f2}ms {latencyMin:f2}ms");
             Console.Write("\r\n");
 
             await Task.WhenAll(writers);
@@ -409,7 +421,7 @@
 
             }
 
-            async Task<(long count,long sum,long max,long min,double mean)> ReaderText(NatsConnection connection, string subject,CancellationToken cancellationToken)
+            async Task<(long count,long sum,long max,long min,double mean)> ReaderText(NatsConnection connection, string subject, ReaderType readerType,CancellationToken cancellationToken)
             {
 
                 await Task.Yield();
@@ -422,13 +434,24 @@
 
                 try
                 {
-                    await foreach (var message in connection.SubscribeUnsafe(subject, cancellationToken: cancellationToken))
+                    void Process(ref NatsInlineMsg message)
                     {
                         count++;
                         var payload = message.Payload;
+
                         if (payload.Length > 0)
                         {
-                            var timestamp = BitConverter.ToInt64(payload.Span);
+                            long timestamp = 0;
+                            if (payload.IsSingleSegment || payload.FirstSpan.Length>=8)
+                            {
+                                timestamp = BitConverter.ToInt64(payload.FirstSpan);
+                            }
+                            else
+                            {
+                                Span<byte> timestampSpan = stackalloc byte[8];
+                                payload.Slice(0, 8).CopyTo(timestampSpan);
+                                timestamp = BitConverter.ToInt64(timestampSpan);
+                            }
 
                             var now = Stopwatch.GetTimestamp();
                             var rtt = (now - timestamp);
@@ -438,6 +461,53 @@
                             sum += rtt;
                             max = Math.Max(rtt, max);
                             min = Math.Min(rtt, min);
+                        }                        
+                    }
+
+                    if(readerType==ReaderType.Inline)
+                    {
+                        await connection.SubscribeUnsafe(subject, Process, cancellationToken: cancellationToken);
+                    }
+                    else if(readerType ==ReaderType.Unsafe)
+                    {
+                        await foreach (var message in connection.SubscribeUnsafe(subject, cancellationToken: cancellationToken))
+                        {
+                            count++;
+                            var payload = message.Payload;
+                            if (payload.Length > 0)
+                            {
+                                var timestamp = BitConverter.ToInt64(payload.Span);
+
+                                var now = Stopwatch.GetTimestamp();
+                                var rtt = (now - timestamp);
+
+                                mean += (rtt - mean) / (double)count;
+
+                                sum += rtt;
+                                max = Math.Max(rtt, max);
+                                min = Math.Min(rtt, min);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        await foreach (var message in connection.Subscribe(subject, cancellationToken: cancellationToken))
+                        {
+                            count++;
+                            var payload = message.Payload;
+                            if (payload.Length > 0)
+                            {
+                                var timestamp = BitConverter.ToInt64(payload.Span);
+
+                                var now = Stopwatch.GetTimestamp();
+                                var rtt = (now - timestamp);
+
+                                mean += (rtt - mean) / (double)count;
+
+                                sum += rtt;
+                                max = Math.Max(rtt, max);
+                                min = Math.Min(rtt, min);
+                            }
                         }
                     }
 
@@ -451,5 +521,12 @@
 
             }
         }
+    }
+
+    enum ReaderType
+    {
+        Normal,
+        Unsafe,
+        Inline
     }
 }

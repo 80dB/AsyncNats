@@ -1,11 +1,8 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
     using System.Buffers.Text;
-    using System.Collections.Generic;
     using System.Text;
-    using System.Xml.Linq;
 
 
     public readonly struct NatsHPub:INatsClientMessage

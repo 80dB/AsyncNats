@@ -1,12 +1,8 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
     using System.Buffers.Text;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
-    using System.Xml.Linq;
 
     public readonly struct NatsUnsub : INatsClientMessage
     {

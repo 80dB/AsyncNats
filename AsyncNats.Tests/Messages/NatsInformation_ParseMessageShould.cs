@@ -17,16 +17,14 @@
         [Fact]
         public void ReturnNatsInformation()
         {
-            var reader = new SequenceReader<byte>();
-            var info = NatsInformation.ParseMessage(new NatsMemoryPool(), _memory.Span, ref reader);
+            var info = new NatsMessageParser().ParseInformation(_memory.Span);
             Assert.IsType<NatsInformation>(info);
         }
 
         [Fact]
         public void ReturnSameServerId()
         {
-            var reader = new SequenceReader<byte>();
-            var info = (NatsInformation) NatsInformation.ParseMessage(new NatsMemoryPool(), _memory.Span, ref reader);
+            var info = (NatsInformation)new NatsMessageParser().ParseInformation(_memory.Span);
             Assert.Equal(_serverId, info.ServerId);
         }
     }

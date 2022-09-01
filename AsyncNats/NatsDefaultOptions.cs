@@ -1,14 +1,12 @@
-﻿using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+﻿
 
 namespace EightyDecibel.AsyncNats
 {
     using System;
     using System.Buffers;
-    using System.IO.Pipelines;
     using System.Net;
-    using EightyDecibel.AsyncNats.Messages;
+    using Microsoft.Extensions.Logging;
+    using System.Security.Cryptography;
 
     public class NatsDefaultOptions : INatsOptions
     {

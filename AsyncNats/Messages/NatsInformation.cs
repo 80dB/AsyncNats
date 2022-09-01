@@ -1,7 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
     using System.Text;
     using System.Text.Json;
     using System.Text.Json.Serialization;
@@ -46,14 +45,7 @@
         [JsonInclude]
         [JsonPropertyName("client_id")]
         public int ClientId { get; private set; }
-
         
-
-        public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
-        {
-            // Remove "INFO " and parse remainder as JSON
-            return JsonSerializer.Deserialize<NatsInformation>(line.Slice(5));
-        }
 
         public override string ToString()
         {

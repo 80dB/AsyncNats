@@ -1,11 +1,6 @@
-﻿using System;
-using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Threading.Tasks.Sources;
-
-namespace EightyDecibel.AsyncNats.Messages
+﻿namespace EightyDecibel.AsyncNats.Messages
 {
+    using System;
     public interface INatsClientMessage
     {
         int Length { get; }

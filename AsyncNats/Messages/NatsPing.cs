@@ -1,10 +1,7 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
 
     public class NatsPing : INatsClientMessage,INatsServerMessage
     {
@@ -14,10 +11,7 @@
 
         public int Length => _command.Length;
 
-        public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
-        {
-            return Instance;
-        }
+       
 
         public void Serialize(Span<byte> buffer)
         {

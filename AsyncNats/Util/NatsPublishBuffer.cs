@@ -5,8 +5,6 @@
     using System.Threading;
     using System.Threading.Tasks;
 
-
-
     internal class NatsPublishBuffer
     {
         public event Action? OnCommit;
@@ -40,37 +38,6 @@
             _buffer = buffer;
             _position=position;
             _messages = messages;
-        }
-
-        public bool TryWrite(int serializedLength,SerializeDelegate writeToBuffer,out int messageIndex)
-        {
-            messageIndex = -1;
-            int start, end;
-            lock (_lock)
-            {
-                var available = (_length - _position);
-
-                if (available < serializedLength) return false;
-
-                if (_commit) return false;
-
-                Interlocked.Increment(ref _writers);
-
-                //get a slot
-                start = _position;
-                end = _position + serializedLength;
-                messageIndex = _messages;
-                Interlocked.Increment(ref _messages);
-
-                //advance position
-                _position = end;
-            }
-
-            var  writeSlot= _buffer.AsSpan().Slice(start, serializedLength);
-
-            writeToBuffer(writeSlot);
-            Interlocked.Decrement(ref _writers);
-            return true;
         }
 
         public bool TryWrite<T>(T msg, out int messageIndex) where T:INatsClientMessage

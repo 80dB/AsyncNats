@@ -47,50 +47,9 @@
             _current = GetBuffer();
         }
 
-
-        public ValueTask Publish(int serializedLength, SerializeDelegate del,CancellationToken cancellationToken)
-        {
-            return PublishInternal(serializedLength, del, cancellationToken);
-        }
-
         public ValueTask Publish<T>(T msg, CancellationToken cancellationToken) where T:INatsClientMessage
         {
             return PublishInternal(msg, cancellationToken);
-        }
-
-        public async ValueTask PublishInternal(int serializedLength, SerializeDelegate del, CancellationToken cancellationToken)
-        {
-
-        retry:
-            var current = _current;
-            var currentVersion = _version;
-
-            if (!current.TryWrite(serializedLength,del,out var messageIndex))
-            {
-                await _channel.Writer.WaitToWriteAsync();
-
-                lock (_lock)
-                {                   
-                    if(currentVersion == _version)
-                    {                        
-                        current = GetBuffer(serializedLength);
-                        current.Reset();
-                        _current = current;
-                        _version++;
-                    }
-                }
-
-                goto retry;
-            }
-
-            //at this point message was written
-
-            if (messageIndex==0)
-            {
-                //if wrote first message on buffer, enqueue
-                await _channel.Writer.WriteAsync(current, cancellationToken);
-            }
-            
         }
 
         public async ValueTask PublishInternal<T>(T msg, CancellationToken cancellationToken) where T : INatsClientMessage
@@ -102,7 +61,7 @@
 
             if (!current.TryWrite(msg, out var messageIndex))
             {
-                await _channel.Writer.WaitToWriteAsync();
+                await _channel.Writer.WaitToWriteAsync().ConfigureAwait(false);
 
                 lock (_lock)
                 {
@@ -123,7 +82,7 @@
             if (messageIndex == 0)
             {
                 //if wrote first message on buffer, enqueue
-                await _channel.Writer.WriteAsync(current, cancellationToken);
+                await _channel.Writer.WriteAsync(current, cancellationToken).ConfigureAwait(false);
             }
 
         }
@@ -132,7 +91,7 @@
         public void Return(NatsPublishBuffer buffer)
         {
             if (!buffer.IsDetached && _pool.Count < Environment.ProcessorCount)
-            {                
+            {
                 _pool.Add(buffer);
             }
             else

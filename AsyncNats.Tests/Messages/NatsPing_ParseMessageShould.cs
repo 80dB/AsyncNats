@@ -14,8 +14,7 @@
         [Fact]
         public void ReturnNatsPing()
         {
-            var reader = new SequenceReader<byte>();
-            var ping = NatsPing.ParseMessage(new NatsMemoryPool(),_message.Span, ref reader);
+            var ping = new NatsMessageParser().ParsePing();
             Assert.IsType<NatsPing>(ping);
         }
     }

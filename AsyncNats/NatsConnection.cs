@@ -1,7 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
     using System;
-    using System.Buffers;
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.IO.Pipelines;
@@ -15,7 +14,6 @@
     using Rpc;
     using Microsoft.Extensions.Logging;
     using System.Collections.Concurrent;
-
 
     public class NatsConnection : INatsConnection
     {
@@ -41,6 +39,7 @@
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
         private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
+        private readonly ConcurrentDictionary<long, InlineSubscription> _inlineSubscriptions = new ConcurrentDictionary<long, InlineSubscription>();
 
 
         private class Subscription
@@ -74,6 +73,25 @@
             
             public ChannelWriter<NatsMsg> Writer { get; }
             public ChannelReader<NatsMsg> Reader { get; }
+        }
+
+        internal class InlineSubscription
+        {
+            public NatsKey Subject { get; }
+            public NatsKey QueueGroup { get; }
+            public long SubscriptionId { get; }
+            public NatsMessageInlineProcess Process { get; }
+
+            public InlineSubscription(NatsKey subject, NatsKey? queueGroup, long subscriptionId, NatsMessageInlineProcess process)
+            {
+                Subject = subject;
+                QueueGroup = queueGroup ?? NatsKey.Empty;
+                SubscriptionId = subscriptionId;
+                Process = process;
+            }
+
+
+
         }
 
         private NatsStatus _status;
@@ -174,8 +192,9 @@
                 }
 
                 _receiverQueueSize = 0;
+
+                var readPipe = new Pipe(new PipeOptions(pauseWriterThreshold: 1024 * 1024,useSynchronizationContext:false));
                 
-                var readPipe = new Pipe(new PipeOptions(pauseWriterThreshold: 1024*1024));
                 // ReSharper disable AccessToDisposedClosure
                 var readTask = Task.Run(() => ReadSocketAsync(socket, readPipe.Writer, internalDisconnect.Token), internalDisconnect.Token);
                 var processTask = Task.Run(() => ProcessMessagesAsync(readPipe.Reader, internalDisconnect.Token), internalDisconnect.Token);
@@ -229,18 +248,20 @@
         private async Task ReadSocketAsync(Socket socket, PipeWriter writer, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting ReadSocketAsync loop");
+
             while (!disconnectToken.IsCancellationRequested)
             {
-                var memory = writer.GetMemory(socket.Available);
+                var memory = writer.GetMemory(socket.ReceiveBufferSize);
 
-                var readBytes = await socket.ReceiveAsync(memory, SocketFlags.None, disconnectToken);
+                var readBytes = await socket.ReceiveAsync(memory, SocketFlags.None, disconnectToken).ConfigureAwait(false);
                 if (readBytes == 0) break;
 
                 writer.Advance(readBytes);
                 Interlocked.Add(ref _receiverQueueSize, readBytes);
                 Interlocked.Add(ref _receivedBytesTotal, readBytes);
 
-                var flush = await writer.FlushAsync(disconnectToken);
+
+                var flush = await writer.FlushAsync(disconnectToken).ConfigureAwait(false);
                 if (flush.IsCompleted || flush.IsCanceled) break;
             }
             _logger?.LogTrace("Exited ReadSocketAsync loop");
@@ -249,19 +270,22 @@
         private async Task ProcessMessagesAsync(PipeReader reader, CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting ProcessMessagesAsync loop");
-            var parser = new NatsMessageParser(_memoryPool);
+            var parser = new NatsMessageParser(_memoryPool,_inlineSubscriptions);
 
             INatsServerMessage[] parsedMessageBuffer = new INatsServerMessage[1024]; //arbitrary
 
             while (!disconnectToken.IsCancellationRequested)
             {
-                var read = await reader.ReadAsync(disconnectToken);
+                var read = await reader.ReadAsync(disconnectToken).ConfigureAwait(false);
                
                 if (read.IsCanceled) break;
                 do
                 {                    
-                    var parsedCount = parser.ParseMessages(read.Buffer, parsedMessageBuffer, out var consumed);                    
+                    var parsedCount = parser.ParseMessages(read.Buffer, parsedMessageBuffer, out var consumed,out var inlined);                    
                     reader.AdvanceTo(read.Buffer.GetPosition(consumed));
+
+                    Interlocked.Add(ref _receivedMessagesTotal, inlined);
+
                     if (consumed == 0) break;
 
                     Interlocked.Add(ref _receiverQueueSize, (long)-consumed);
@@ -278,7 +302,7 @@
                                 if (_subscriptions.TryGetValue(msg.SubscriptionId, out var subscription))
                                 {
                                     msg.Rent();
-                                    await subscription.Writer.WriteAsync(msg, disconnectToken);
+                                    await subscription.Writer.WriteAsync(msg, disconnectToken).ConfigureAwait(false);
                                     msg.Release();
                                 }
                                 break;
@@ -318,7 +342,7 @@
             while (!disconnectToken.IsCancellationRequested)
             {          
                 
-                await foreach(var chunk in reader.ReadAllAsync(disconnectToken))
+                await foreach(var chunk in reader.ReadAllAsync(disconnectToken).ConfigureAwait(false))
                 {
                     await chunk.Commit();
 
@@ -348,7 +372,7 @@
                 int sent = 0;
                 try
                 {
-                    sent = await socket.SendAsync(data, SocketFlags.None, CancellationToken.None);
+                    sent = await socket.SendAsync(data, SocketFlags.None, CancellationToken.None).ConfigureAwait(false);
 
                     //it seems there's no chance sent can be < data length for send success
                     return sent;
@@ -479,6 +503,29 @@
             return WriteAsync(new NatsUnsub( subscription.SubscriptionId, null), CancellationToken.None);
         }
 
+        private async ValueTask InternalInlineSubscribe(NatsKey subject, NatsKey? queueGroup,NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
+        {
+            var subscription = new InlineSubscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), process);
+
+            _inlineSubscriptions.TryAdd(subscription.SubscriptionId, subscription);
+
+            await WriteAsync(new NatsSub(subscription.Subject, subscription.QueueGroup, subscription.SubscriptionId), cancellationToken);
+            try
+            {
+                var tcs = new TaskCompletionSource<bool>();
+
+                cancellationToken.Register(() => tcs.SetResult(true));
+
+                await tcs.Task;
+                
+            }
+            finally
+            {
+                await WriteAsync(new NatsUnsub(subscription.SubscriptionId, null), CancellationToken.None);
+                _inlineSubscriptions.TryRemove(subscription.SubscriptionId,out _);
+            }
+        }
+
         private async IAsyncEnumerable<NatsMsg> InternalSubscribe(NatsKey subject, NatsKey? queueGroup, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var subscription = new Subscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), Options.ReceiverQueueLength);
@@ -558,7 +605,16 @@
                 }
             }
         }
-
+                
+        public async ValueTask SubscribeUnsafe(NatsKey subject, NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
+        {          
+            await InternalInlineSubscribe(subject, NatsKey.Empty, process, cancellationToken);
+        }
+        
+        public async ValueTask SubscribeUnsafe(NatsKey subject, NatsKey queueGroup,NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
+        {
+            await InternalInlineSubscribe(subject, queueGroup, process, cancellationToken);
+        }
 
         public async IAsyncEnumerable<string> SubscribeText(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -572,7 +628,6 @@
                 yield return DeserializeWrapper(Deserialize, msg);
             }
         }
-
                        
         public async IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -635,4 +690,5 @@
             ConnectionException?.Invoke(sender, new NatsServerException(msg, exception));
         }
     }
+
 }
