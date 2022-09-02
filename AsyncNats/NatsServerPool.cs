@@ -11,26 +11,18 @@
     internal class NatsServerPool
     {
 
-        public List<NatsHost> Servers => new List<NatsHost>(_servers.Concat(_discoveredServers));
+        public List<DnsEndPoint> Servers => new List<DnsEndPoint>(_servers.Concat(_discoveredServers));
 
-        List<NatsHost> _servers = new List<NatsHost>();
-        List<NatsHost> _discoveredServers = new List<NatsHost>();
+        List<DnsEndPoint> _servers = new List<DnsEndPoint>();
+        List<DnsEndPoint> _discoveredServers = new List<DnsEndPoint>();
         Random _random = new Random();
-        NatsHost? _lastSelectedServer = null;
+        DnsEndPoint? _lastSelectedServer = null;
         INatsOptions _options;
 
         object _sync = new object();
 
         public NatsServerPool(INatsOptions options)
         {
-
-#pragma warning disable CS0618 // Type or member is obsolete
-            //allow legacy server indication
-            if (options.Server != null && options.Servers==null)
-            {
-                options.Servers = new string[] { $"{options.Server.Address}:{options.Server.Port}" };
-            }
-#pragma warning restore CS0618 // Type or member is obsolete
 
             var servers = options.Servers;
 
@@ -43,7 +35,7 @@
                 AddServer(_servers,server);
         }
 
-        public NatsHost SelectServer(bool isRetry=false)
+        public DnsEndPoint SelectServer(bool isRetry=false)
         {
             lock(_sync)
             {
@@ -53,34 +45,32 @@
 
                 var selectedServer = combinedServers[0];
 
-                if (combinedServers.Count > 1)
+                if (combinedServers.Count == 1)
                 {
-                    if (!isRetry)
-                        _lastSelectedServer = null;
+                    _lastSelectedServer = selectedServer;
+                    return selectedServer!;
+                }
 
-                    if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.Randomize))
-                    {
-                        //if possible, randomize but also avoid returning the same selection as previous on retry
-                        selectedServer = combinedServers
-                            .Where(s => s != _lastSelectedServer)
-                            .OrderBy(s => _random.Next())
-                            .First();
-                    }
-                    else
-                    {
-                        if(_lastSelectedServer != null)
-                        {
-                            //return server list in order
-                            if (combinedServers.IndexOf(_lastSelectedServer) + 1 >= combinedServers.Count)
-                                selectedServer = combinedServers[0];
-                            else
-                                selectedServer = combinedServers[combinedServers.IndexOf(_lastSelectedServer) + 1];
-                        }
-                    }
+
+                if (!isRetry)
+                    _lastSelectedServer = null;
+
+                if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.Randomize))
+                {
+                    //if possible, randomize but also avoid returning the same selection as previous on retry
+                    selectedServer = combinedServers
+                        .Where(s => s != _lastSelectedServer)
+                        .OrderBy(s => _random.Next())
+                        .First();
+                }
+                else if(_lastSelectedServer != null)
+                {
+                    //return server list in order
+                    if (combinedServers.IndexOf(_lastSelectedServer) +1 != combinedServers.Count)
+                        selectedServer = combinedServers[combinedServers.IndexOf(_lastSelectedServer) + 1];
                 }
 
                 _lastSelectedServer = selectedServer;
-
                 return selectedServer!;
             }            
         }
@@ -94,7 +84,7 @@
 
             lock (_sync)
             {
-                _discoveredServers = new List<NatsHost>();
+                _discoveredServers = new List<DnsEndPoint>();
 
                 foreach (var server in servers.OrderBy(s=>Guid.NewGuid())) //randomize discovered
                     AddServer(_discoveredServers, server);
@@ -102,7 +92,7 @@
             
         }
 
-        private NatsHost ParseAndNormalizeServerEntry(string server)
+        private DnsEndPoint ParseAndNormalizeServerEntry(string server)
         {
             var schemaIndex = server.IndexOf("://");
             if (schemaIndex > 0)
@@ -130,11 +120,11 @@
             if(checkHostNameResult==UriHostNameType.Unknown)
                 throw new FormatException($"invalid server string {server}");
 
-            return new NatsHost(stringHost,port);
+            return new DnsEndPoint(stringHost,port);
             
         }
 
-        private void AddServer(List<NatsHost> list, string server)
+        private void AddServer(List<DnsEndPoint> list, string server)
         {
             lock (_sync)
             {
@@ -147,30 +137,6 @@
             }
         }               
 
-        internal class NatsHost:IEquatable<NatsHost>
-        {
-            public string Host { get; set; }
-            public int Port { get; set; }
-
-            public NatsHost(string host, int port)            {
-                Host = host;
-                Port = port;
-            }
-
-            public bool Equals(NatsHost other)
-            {
-                return other.Host == this.Host && other.Port == this.Port;
-            }
-
-            public override int GetHashCode()
-            {
-                return HashCode.Combine(Host, Port);
-            }
-
-            public override string ToString()
-            {
-                return $"{Host}:{Port}";
-            }
-        }
+        
     }
 }

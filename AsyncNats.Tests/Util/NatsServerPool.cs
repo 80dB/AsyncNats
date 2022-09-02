@@ -11,19 +11,7 @@
     public class NatsServerPoolTests
     {
 
-        [Fact]
-        public void AcceptLegacyServerField()
-        {
-            var options = new NatsDefaultOptions()
-            {
-                Server = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4222),
-                Servers = null
-            };
-
-            var pool = new NatsServerPool(options);
-
-            Assert.Equal("127.0.0.1:4222", pool.Servers[0].ToString());
-        }
+        
 
         [Fact]
         public void AcceptSingleServer()
@@ -35,7 +23,8 @@
 
             var pool = new NatsServerPool(options);
 
-            Assert.Equal("127.0.0.1:4222", pool.Servers[0].ToString());
+            Assert.Equal("127.0.0.1", pool.Servers[0].Host);
+            Assert.Equal(4222, pool.Servers[0].Port);
         }
 
         [Fact]
@@ -48,9 +37,13 @@
 
             var pool = new NatsServerPool(options);
 
-            Assert.Equal(2, pool.Servers.Count);
-            Assert.Equal("127.0.0.1:4222", pool.Servers[0].ToString());
-            Assert.Equal("127.0.0.2:4222", pool.Servers[1].ToString());
+            Assert.Equal(2, pool.Servers.Count);           
+
+            Assert.Equal("127.0.0.1", pool.Servers[0].Host); 
+            Assert.Equal(4222, pool.Servers[0].Port);
+
+            Assert.Equal("127.0.0.2", pool.Servers[1].Host);            
+            Assert.Equal(4222, pool.Servers[1].Port);
 
         }
 
@@ -63,7 +56,8 @@
             };
 
             var pool = new NatsServerPool(options);
-            Assert.Equal("nats.local.com:4222", pool.Servers[0].ToString());
+            Assert.Equal("nats.local.com", pool.Servers[0].Host);
+            Assert.Equal(4222, pool.Servers[0].Port);
         }
 
         [Fact]
@@ -76,7 +70,8 @@
 
             var pool = new NatsServerPool(options);
 
-            Assert.Equal("nats.local.com:4222",pool.Servers[0].ToString());
+            Assert.Equal("nats.local.com", pool.Servers[0].Host);
+            Assert.Equal(4222, pool.Servers[0].Port);
         }
 
         [Fact]
@@ -89,7 +84,8 @@
 
             var pool = new NatsServerPool(options);
 
-            Assert.Equal("127.0.0.1:4222", pool.Servers[0].ToString());
+            Assert.Equal("127.0.0.1", pool.Servers[0].Host);
+            Assert.Equal(4222, pool.Servers[0].Port);
         }
 
         [Fact]
@@ -135,16 +131,16 @@
             var pool = new NatsServerPool(options);
 
             var selectedServer = pool.SelectServer(isRetry: false);
-            Assert.Equal(server1, selectedServer.ToString());
+            Assert.Equal("server1.nats.local", selectedServer.Host);
 
             selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal(server2, selectedServer.ToString());
+            Assert.Equal("server2.nats.local", selectedServer.Host);
 
             selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal(server3, selectedServer.ToString());
+            Assert.Equal("server3.nats.local", selectedServer.Host);
 
             selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal(server1, selectedServer.ToString());//should rotate
+            Assert.Equal("server1.nats.local", selectedServer.Host);//should rotate
         }
 
         [Fact]
@@ -184,13 +180,16 @@
 
             pool.AddDiscoveredServers(new[] { "nats://nats2.local.com:4222" });
 
-            Assert.Equal("nats2.local.com:4222", pool.Servers[1].ToString());
+            Assert.Equal("nats2.local.com", pool.Servers[1].Host);
+            Assert.Equal(4222, pool.Servers[1].Port);
 
             var selectedServer = pool.SelectServer();
-            Assert.Equal("nats.local.com:4222", selectedServer.ToString());
+            Assert.Equal("nats.local.com", selectedServer.Host);
+            Assert.Equal(4222, selectedServer.Port);
 
             selectedServer = pool.SelectServer(isRetry:true);
-            Assert.Equal("nats2.local.com:4222", selectedServer.ToString());
+            Assert.Equal("nats2.local.com", selectedServer.Host);
+            Assert.Equal(4222, selectedServer.Port);
         }
 
         [Fact]

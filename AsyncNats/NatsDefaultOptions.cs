@@ -14,8 +14,7 @@ namespace EightyDecibel.AsyncNats
     public class NatsDefaultOptions : INatsOptions
     {
         public NatsDefaultOptions()
-        {
-            Server = null;
+        {            
             Servers = new string[] { "127.0.0.1:4222" };
             DnsResolver = Dns.GetHostAddressesAsync;
             SenderQueueLength = 5000;
@@ -31,7 +30,6 @@ namespace EightyDecibel.AsyncNats
             RequestPrefix = new Guid(bytes).ToString();
         }
 
-        public IPEndPoint? Server { get; set; }
         public string[] Servers { get; set; }
         public Func<string, Task<IPAddress[]>> DnsResolver { get; set; }
         public NatsServerPoolFlags ServersOptions { get; set; }

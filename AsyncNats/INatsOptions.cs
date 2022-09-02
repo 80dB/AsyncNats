@@ -8,10 +8,7 @@ namespace EightyDecibel.AsyncNats
     using System.Threading.Tasks;
 
     public interface INatsOptions
-    {
-        [Obsolete("Use Servers instead")]
-        IPEndPoint? Server { get; }
-
+    {        
         string[] Servers { get; set; }
 
         /// <summary>

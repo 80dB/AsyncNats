@@ -39,7 +39,7 @@
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
         private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
-        private NatsServerPool.NatsHost _currentServer;
+        private DnsEndPoint _currentServer;
 
         private class Subscription
         {
@@ -213,7 +213,7 @@
                 var readPipe = new Pipe(new PipeOptions(pauseWriterThreshold: 1024*1024));
                 // ReSharper disable AccessToDisposedClosure
 
-                var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(disconnectToken, internalDisconnect.Token);
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(disconnectToken, internalDisconnect.Token);
 
                 var readTask = Task.Run(() => ReadSocketAsync(socket, readPipe.Writer, combinedCts.Token), combinedCts.Token);
                 var processTask = Task.Run(() => ProcessMessagesAsync(readPipe.Reader, combinedCts.Token), combinedCts.Token);
@@ -476,43 +476,7 @@
 
             await WriteAsync(pub, cancellationToken);
         }
-
-        public async ValueTask PublishAsync(NatsKey subject, CancellationToken cancellationToken = default)
-        {        
-            var pub = NatsPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, NatsPayload.Empty);
-            await WriteAsync(pub, cancellationToken);
-        }
-
-        public async ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, headers, NatsPayload.Empty);
-            await WriteAsync(pub, cancellationToken);
-        }
-
-        public async ValueTask PublishAsync(NatsKey subject, NatsPayload payload, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, payload);
-            await WriteAsync(pub, cancellationToken);
-        }
-
-        public async ValueTask PublishAsync(NatsKey subject, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, NatsKey.Empty, headers, payload);
-            await WriteAsync(pub, cancellationToken);
-        }
-
-        public async ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsPayload payload, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsPub.RentedSerialize(_memoryPool, subject, replyTo, payload);
-            await WriteAsync(pub, cancellationToken);
-        }
-
-        public async ValueTask PublishAsync(NatsKey subject, NatsKey replyTo, NatsMsgHeaders headers, NatsPayload payload, CancellationToken cancellationToken = default)
-        {
-            var pub = NatsHPub.RentedSerialize(_memoryPool, subject, replyTo, headers, payload);
-            await WriteAsync(pub, cancellationToken);
-        }
-
+              
         internal async ValueTask PublishRaw(ReadOnlyMemory<byte> rawData,int messageCount, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
