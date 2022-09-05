@@ -16,6 +16,8 @@ namespace EightyDecibel.AsyncNats
         /// </summary>
         Func<string, Task<IPAddress[]>> DnsResolver { get; set; }
 
+        Func<INatsOptions,INatsServerPool> ServerPoolFactory { get; set; }
+
         NatsServerPoolFlags ServersOptions { get; set; }
 
         int SenderQueueLength { get; }

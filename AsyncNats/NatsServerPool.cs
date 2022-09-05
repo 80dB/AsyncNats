@@ -8,21 +8,33 @@
     using System.Threading.Tasks;
     using Microsoft.Extensions.Logging;
 
-    internal class NatsServerPool
+    internal class NatsServerPool:INatsServerPool
     {
-
-        public List<DnsEndPoint> Servers => new List<DnsEndPoint>(_servers.Concat(_discoveredServers));
+        public IList<DnsEndPoint> Servers
+        {
+            get
+            {
+                if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.AllowDiscovery))
+                    return new List<DnsEndPoint>(_servers.Concat(_discoveredServers));
+                else
+                    return new List<DnsEndPoint>(_servers);
+            }
+        }
 
         List<DnsEndPoint> _servers = new List<DnsEndPoint>();
         List<DnsEndPoint> _discoveredServers = new List<DnsEndPoint>();
         Random _random = new Random();
-        DnsEndPoint? _lastSelectedServer = null;
+        DnsEndPoint? _lastSelectedDnsEndPoint = null;
+        Queue<IPEndPoint> _retryIPEndPointQueue = new Queue<IPEndPoint>();
         INatsOptions _options;
+        ILogger<NatsServerPool>? _logger;
 
         object _sync = new object();
 
         public NatsServerPool(INatsOptions options)
         {
+
+            _logger=options.LoggerFactory?.CreateLogger<NatsServerPool>();
 
             var servers = options.Servers;
 
@@ -35,47 +47,83 @@
                 AddServer(_servers,server);
         }
 
-        public DnsEndPoint SelectServer(bool isRetry=false)
+
+        public async ValueTask<IPEndPoint> SelectServer(bool isRetry=false)
         {
-            lock(_sync)
+            DnsEndPoint SelectDnsEndpoint(bool isRetry)
             {
-                var combinedServers = _servers;
-                if(_options.ServersOptions.HasFlag(NatsServerPoolFlags.AllowDiscovery))
-                    combinedServers = _servers.Concat(_discoveredServers).ToList();
-
-                var selectedServer = combinedServers[0];
-
-                if (combinedServers.Count == 1)
+                DnsEndPoint selectedServer;
+                lock (_sync)
                 {
-                    _lastSelectedServer = selectedServer;
+                    var combinedServers = _servers;
+                    if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.AllowDiscovery))
+                        combinedServers = _servers.Concat(_discoveredServers).ToList();
+
+                    selectedServer = combinedServers[0];
+
+                    if (combinedServers.Count == 1)
+                    {
+                        _lastSelectedDnsEndPoint = selectedServer;
+                        return selectedServer!;
+                    }
+
+
+                    if (!isRetry)
+                        _lastSelectedDnsEndPoint = null;
+
+                    if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.Randomize))
+                    {
+                        //if possible, randomize but also avoid returning the same selection as previous on retry
+                        selectedServer = combinedServers
+                            .Where(s => s != _lastSelectedDnsEndPoint)
+                            .OrderBy(s => _random.Next())
+                            .First();
+                    }
+                    else if (_lastSelectedDnsEndPoint != null)
+                    {
+                        //return server list in order
+                        if (combinedServers.IndexOf(_lastSelectedDnsEndPoint) + 1 != combinedServers.Count)
+                            selectedServer = combinedServers[combinedServers.IndexOf(_lastSelectedDnsEndPoint) + 1];
+                    }
+
+                    _lastSelectedDnsEndPoint = selectedServer;
                     return selectedServer!;
                 }
+            }
 
+            if (isRetry && _retryIPEndPointQueue.Count > 0)
+                return _retryIPEndPointQueue.Dequeue();
+            else
+                _retryIPEndPointQueue.Clear();
 
-                if (!isRetry)
-                    _lastSelectedServer = null;
+            var dnsEndpoint = SelectDnsEndpoint(isRetry);
 
-                if (_options.ServersOptions.HasFlag(NatsServerPoolFlags.Randomize))
-                {
-                    //if possible, randomize but also avoid returning the same selection as previous on retry
-                    selectedServer = combinedServers
-                        .Where(s => s != _lastSelectedServer)
-                        .OrderBy(s => _random.Next())
-                        .First();
-                }
-                else if(_lastSelectedServer != null)
-                {
-                    //return server list in order
-                    if (combinedServers.IndexOf(_lastSelectedServer) +1 != combinedServers.Count)
-                        selectedServer = combinedServers[combinedServers.IndexOf(_lastSelectedServer) + 1];
-                }
+            if(IPAddress.TryParse(dnsEndpoint.Host, out var ipAddress))
+            {
+                return new IPEndPoint(ipAddress, dnsEndpoint.Port);
+            }
 
-                _lastSelectedServer = selectedServer;
-                return selectedServer!;
-            }            
+            _logger?.LogTrace("Resolving dns hostname {Host}", dnsEndpoint.Host);
+            var resolved = await _options.DnsResolver(dnsEndpoint.Host);
+
+            if(resolved == null)
+            {
+                //dns failed
+                throw new InvalidOperationException("dns resolve returned 0 entries");
+            }
+
+            _logger?.LogTrace("Dns hostname {Host} resolve to {Ips}",string.Join<IPAddress>(',',resolved));
+
+            if (resolved.Length > 1)
+            {                
+                for (var i = 1; i < resolved.Length; i++)
+                    _retryIPEndPointQueue.Enqueue(new IPEndPoint(resolved[i], dnsEndpoint.Port));
+            }
+
+            return new IPEndPoint(resolved[0], dnsEndpoint.Port);
         }
 
-        public void AddDiscoveredServers(IEnumerable<string> servers)
+        public void SetDiscoveredServers(IEnumerable<string> servers)
         {
             if (servers == null || servers.Count()==0) return;
 
@@ -136,7 +184,7 @@
                 }
             }
         }               
-
         
+
     }
 }

@@ -17,12 +17,11 @@ namespace EightyDecibel.AsyncNats
         {            
             Servers = new string[] { "127.0.0.1:4222" };
             DnsResolver = Dns.GetHostAddressesAsync;
+            ServerPoolFactory = (o) => new NatsServerPool(o);
             SenderQueueLength = 5000;
             ReceiverQueueLength = 5000;
             Serializer = new NatsDefaultSerializer();
-            ArrayPool = ArrayPool<byte>.Create(1024*1024, 1024);
-            
-
+            ArrayPool = ArrayPool<byte>.Create(1024*1024, 1024);            
 
             using var random = RandomNumberGenerator.Create();
             Span<byte> bytes = stackalloc byte[16];
@@ -47,5 +46,6 @@ namespace EightyDecibel.AsyncNats
         public string RequestPrefix { get; set; }
 
         public ILoggerFactory? LoggerFactory { get; set; }
+        public Func<INatsOptions, INatsServerPool> ServerPoolFactory { get; set; }
     }
 }

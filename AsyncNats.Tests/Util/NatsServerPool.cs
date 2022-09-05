@@ -4,13 +4,40 @@
     using System.Buffers;
     using System.Net;
     using System.Text;
+    using System.Threading.Tasks;
     using EightyDecibel.AsyncNats;
     using EightyDecibel.AsyncNats.Messages;
     using Xunit;
 
     public class NatsServerPoolTests
     {
+        static class TestResolver
+        {
+            public static async Task<IPAddress[]> ResolveSingle(string host)
+            {
+                switch (host)
+                {
+                    case "server1.nats.local":return new[] { IPAddress.Parse("192.168.0.1") };
+                    case "server2.nats.local": return new[] { IPAddress.Parse("192.168.0.2") };
+                    case "server3.nats.local": return new[] { IPAddress.Parse("192.168.0.3") };
+                    default: return new[] { IPAddress.Parse("192.168.0.1") };
+                }
+            }
 
+            public static async Task<IPAddress[]> ResolveMultiple(string host)
+            {
+                switch (host)
+                {
+                    case "server1.nats.local": return new[] { IPAddress.Parse("192.168.0.1"), IPAddress.Parse("192.168.0.2"), IPAddress.Parse("192.168.0.3") };
+                    case "server2.nats.local": return new[] { IPAddress.Parse("192.168.1.1"), IPAddress.Parse("192.168.1.2"), IPAddress.Parse("192.168.1.3") };
+                    case "server3.nats.local": return new[] { IPAddress.Parse("192.168.2.1"), IPAddress.Parse("192.168.1.2"), IPAddress.Parse("192.168.1.3") };
+
+                    default: return new[] { IPAddress.Parse("192.168.0.1"), IPAddress.Parse("192.168.0.2"), IPAddress.Parse("192.168.0.3") };
+                }
+            }
+
+
+        }
         
 
         [Fact]
@@ -117,7 +144,7 @@
         }
 
         [Fact]
-        public void SelectServersInOrder()
+        public async Task SelectServersInOrder()
         {
             var server1 = "server1.nats.local:4222";
             var server2 = "server2.nats.local:4222";
@@ -125,22 +152,59 @@
 
             var options = new NatsDefaultOptions()
             {
-                Servers = new[] { server1,server2,server3 }
+                Servers = new[] { server1,server2,server3 },
+                DnsResolver=TestResolver.ResolveSingle
             };
 
             var pool = new NatsServerPool(options);
 
-            var selectedServer = pool.SelectServer(isRetry: false);
-            Assert.Equal("server1.nats.local", selectedServer.Host);
+            var selectedServer = await pool.SelectServer(isRetry: false);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.1"),4222), selectedServer);
 
-            selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal("server2.nats.local", selectedServer.Host);
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.2"), 4222), selectedServer);
 
-            selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal("server3.nats.local", selectedServer.Host);
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.3"), 4222), selectedServer);
 
-            selectedServer = pool.SelectServer(isRetry: true);
-            Assert.Equal("server1.nats.local", selectedServer.Host);//should rotate
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.1"), 4222), selectedServer);//should rotate
+        }
+
+        [Fact]
+        public async Task RotateMultipleIpsForSingleDnsEntry()
+        {
+            var server1 = "server1.nats.local:4222";
+            var server2 = "server2.nats.local:4222";
+
+            var options = new NatsDefaultOptions()
+            {
+                Servers = new[] { server1, server2 },
+                DnsResolver = TestResolver.ResolveMultiple
+            };
+
+            var pool = new NatsServerPool(options);
+
+            var selectedServer = await pool.SelectServer(isRetry: false);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.1"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.2"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.3"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.1.1"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.1.2"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.1.3"), 4222), selectedServer);
+
+            selectedServer = await pool.SelectServer(isRetry: true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.1"), 4222), selectedServer);
         }
 
         [Fact]
@@ -168,27 +232,28 @@
         }
 
         [Fact]
-        public void AllowDiscoveryAndSelectDiscoveredServer()
+        public async Task AllowDiscoveryAndSelectDiscoveredServer()
         {
             var options = new NatsDefaultOptions()
             {
-                Servers = new[] { "nats://nats.local.com:4222" },
-                ServersOptions=NatsServerPoolFlags.AllowDiscovery
+                Servers = new[] { "nats://server1.nats.local:4222" },
+                ServersOptions=NatsServerPoolFlags.AllowDiscovery,
+                DnsResolver=TestResolver.ResolveSingle
             };
 
             var pool = new NatsServerPool(options);
 
-            pool.AddDiscoveredServers(new[] { "nats://nats2.local.com:4222" });
+            pool.SetDiscoveredServers(new[] { "nats://server2.nats.local:4222" });
 
-            Assert.Equal("nats2.local.com", pool.Servers[1].Host);
+            Assert.Equal("server2.nats.local", pool.Servers[1].Host);
             Assert.Equal(4222, pool.Servers[1].Port);
 
-            var selectedServer = pool.SelectServer();
-            Assert.Equal("nats.local.com", selectedServer.Host);
+            var selectedServer = await pool.SelectServer();
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.1"), 4222), selectedServer);
             Assert.Equal(4222, selectedServer.Port);
 
-            selectedServer = pool.SelectServer(isRetry:true);
-            Assert.Equal("nats2.local.com", selectedServer.Host);
+            selectedServer = await pool.SelectServer(isRetry:true);
+            Assert.Equal(new IPEndPoint(IPAddress.Parse("192.168.0.2"), 4222), selectedServer);
             Assert.Equal(4222, selectedServer.Port);
         }
 
@@ -203,7 +268,7 @@
 
             var pool = new NatsServerPool(options);
 
-            pool.AddDiscoveredServers(new[] { "nats://nats2.local.com:4222" });
+            pool.SetDiscoveredServers(new[] { "nats://nats2.local.com:4222" });
 
             Assert.Single(pool.Servers);
         }

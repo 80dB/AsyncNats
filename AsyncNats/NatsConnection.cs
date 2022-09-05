@@ -39,7 +39,6 @@
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
         private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
-        private DnsEndPoint _currentServer;
 
         private class Subscription
         {
@@ -74,7 +73,7 @@
         private NatsStatus _status;
         private readonly CancellationTokenSource _disposeTokenSource;
 
-        private NatsServerPool _serverPool;
+        private INatsServerPool _serverPool;
 
         public INatsOptions Options { get; }
 
@@ -124,7 +123,7 @@
 
             _logger = options.LoggerFactory?.CreateLogger<NatsConnection>();
 
-            _serverPool = new NatsServerPool(options);
+            _serverPool = options.ServerPoolFactory(options);
         }
 
         public ValueTask ConnectAsync()
@@ -163,41 +162,17 @@
 
                 using var internalDisconnect = new CancellationTokenSource();
 
+                IPEndPoint ipEndpoint = null;
                 try
                 {
-                    _currentServer = _serverPool.SelectServer(_isRetry);
-                    _logger?.LogTrace("Connecting to {Server}", _currentServer);
-
-                    IPEndPoint ipEndpoint;
-                    if (IPAddress.TryParse(_currentServer.Host, out var ipAddress))
-                    {
-                        ipEndpoint = new IPEndPoint(ipAddress, _currentServer.Port);
-                    }
-                    else
-                    {
-                        _logger?.LogTrace("Resolving dns hostname {Host}", _currentServer.Host);
-
-                        try
-                        {
-                            var resolvedHost = await (Options.DnsResolver ?? Dns.GetHostAddressesAsync)(_currentServer.Host);
-
-                            var selectedIpAddress = resolvedHost.OrderBy(i => Guid.NewGuid()).First();
-                            _logger?.LogTrace("Dns hostname {Host} resolve to {Ip}", _currentServer.Host, selectedIpAddress);
-                            ipEndpoint = new IPEndPoint(selectedIpAddress, _currentServer.Port);
-                        }
-                        catch(SocketException ex)
-                        {
-                            _logger?.LogWarning("Failed to resolve dns hostname {Host}", _currentServer.Host);
-                            throw;
-                        }
-                        
-                    }
+                    ipEndpoint = await _serverPool.SelectServer(_isRetry);
+                    _logger?.LogTrace("Connecting to {Server}", ipEndpoint);                    
 
                     await socket.ConnectAsync(ipEndpoint);
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogError(ex, "Error connecting to {Server}", _currentServer);
+                    _logger?.LogError(ex, "Error connecting to {Server}", ipEndpoint);
                     ConnectionException?.Invoke(this, ex);
 
                     await Task.Delay(TimeSpan.FromSeconds(1), disconnectToken);
@@ -221,7 +196,7 @@
                 // ReSharper restore AccessToDisposedClosure
                 try
                 {
-                    _logger?.LogTrace("Connected to {Server}", _currentServer);
+                    _logger?.LogTrace("Connected to {Server}", ipEndpoint);
 
                     Status = NatsStatus.Connected;
 
@@ -324,11 +299,11 @@
                                 break;
 
                             case NatsInformation info:
-                                _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", _currentServer, info);
+                                _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", info.Host, info);
 
                                 NatsInformation = info;
 
-                                _serverPool.AddDiscoveredServers(info.ConnectURLs);
+                                _serverPool.SetDiscoveredServers(info.ConnectURLs);
 
                                 ConnectionInformation?.Invoke(this, info);
                                 break;
