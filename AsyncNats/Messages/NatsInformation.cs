@@ -47,7 +47,9 @@
         [JsonPropertyName("client_id")]
         public int ClientId { get; private set; }
 
-        
+        [JsonInclude]
+        [JsonPropertyName("connect_urls")]
+        public string[] ConnectURLs { get; private set; }
 
         public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {

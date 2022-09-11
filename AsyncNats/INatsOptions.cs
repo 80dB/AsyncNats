@@ -5,10 +5,20 @@ namespace EightyDecibel.AsyncNats
     using System;
     using System.Buffers;
     using System.Net;
+    using System.Threading.Tasks;
 
     public interface INatsOptions
-    {
-        IPEndPoint Server { get; }
+    {        
+        string[] Servers { get; set; }
+
+        /// <summary>
+        /// If set, will be used instead of system dns
+        /// </summary>
+        Func<string, Task<IPAddress[]>> DnsResolver { get; set; }
+
+        Func<INatsOptions,INatsServerPool> ServerPoolFactory { get; set; }
+
+        NatsServerPoolFlags ServersOptions { get; set; }
 
         int SenderQueueLength { get; }
 
