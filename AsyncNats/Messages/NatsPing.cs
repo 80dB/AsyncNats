@@ -2,9 +2,7 @@
 {
     using System;
     using System.Buffers;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
 
     public class NatsPing : INatsServerMessage, INatsClientMessage
     {
@@ -21,5 +19,12 @@
         {
             return _command; 
         }
+
+        public void Serialize(Span<byte> buffer)
+        {
+            _command.Memory.Span.CopyTo(buffer);
+        }
+
+        public int Length => _command.Memory.Length;
     }
 }

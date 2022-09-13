@@ -6,7 +6,7 @@
     using System.Text.Json;
     using System.Text.Json.Serialization;
 
-    public class NatsConnect
+    public class NatsConnect /*: INatsClientMessage*/ // Cheated 
     {
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("CONNECT "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));

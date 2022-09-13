@@ -2,24 +2,29 @@
 {
     using System;
     using System.Buffers;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
 
     public class NatsPong : INatsServerMessage, INatsClientMessage
     {
         private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PONG\r\n"));
 
-        private static readonly NatsPong _instance = new NatsPong();
+        public static readonly NatsPong Instance = new NatsPong();
 
         public static INatsServerMessage ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
         {
-            return _instance;
+            return Instance;
         }
 
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)
         {
             return _command;
         }
+
+        public void Serialize(Span<byte> buffer)
+        {
+            _command.Memory.Span.CopyTo(buffer);
+        }
+
+        public int Length => _command.Memory.Length;
     }
 }

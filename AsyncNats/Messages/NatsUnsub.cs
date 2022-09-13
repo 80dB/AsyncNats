@@ -3,17 +3,33 @@
     using System;
     using System.Buffers;
     using System.Buffers.Text;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
-    using System.Xml.Linq;
 
     public class NatsUnsub : INatsClientMessage
     {
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("UNSUB "));
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
-        
+
+        private readonly NatsKey _subscriptionId;
+        private readonly int? _maxMessages;
+
+        public NatsUnsub(long subscriptionId, int? maxMessages)
+        {
+            _maxMessages = maxMessages;
+            _subscriptionId = subscriptionId.ToString();
+
+            var length = _command.Length;
+            length += _subscriptionId.Memory.Length;
+            if (maxMessages.HasValue)
+            {
+                length += maxMessages.Value.CountDigits();
+                length += _del.Length;
+            }
+            length += _end.Length;
+            Length = length;
+        }
+
         public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, long subscriptionId, int? maxMessages)
         {
             Span<byte> subscriptionBytes = stackalloc byte[20]; // Max 20 - Uint64.MaxValue = 18446744073709551615 
@@ -54,6 +70,26 @@
 
             _end.CopyTo(buffer.Slice(consumed));
             return rented;
+        }
+
+        public int Length { get; }
+
+        public void Serialize(Span<byte> buffer)
+        {
+            _command.Span.CopyTo(buffer);
+            var consumed = _command.Length;
+
+            _subscriptionId.Memory.Span.CopyTo(buffer.Slice(consumed));
+            consumed += _subscriptionId.Memory.Length;
+            if (_maxMessages != null)
+            {
+                _del.Span.CopyTo(buffer.Slice(consumed));
+                consumed += _del.Length;
+                Utf8Formatter.TryFormat(_maxMessages.Value, buffer.Slice(consumed), out var written);
+                consumed += written;
+            }
+
+            _end.Span.CopyTo(buffer.Slice(consumed));
         }
     }
 }

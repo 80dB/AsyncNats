@@ -18,11 +18,11 @@
         static async Task Main(string[] args)
         {
 
-            var messageSizes = new[] { 0,8, 16, 32, 64, 128, 256, 512, 1024 };
+            var messageSizes = new[] { 0, /*8, 16, 32, 64,*/ 128, /*256, 512,*/ 1024, 32*1024, 64*1024 };
 
             
 
-            Console.WriteLine();
+/*            Console.WriteLine();
 
             //This first test sends a precomputed large buffer of 100mb 
             //It should get us a figure close to what NATS can ingest and drop
@@ -49,7 +49,7 @@
             {
                 await RunBenchmark(100, 0, messageSize, 0);
             }
-            Console.WriteLine();
+            Console.WriteLine();*/
 
             
             //Here we try to flood NATS with one processing subscription.
@@ -57,12 +57,12 @@
             Console.WriteLine("---Roundtrip raw pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
-                await RunBenchmark(1, 1, messageSize, 0, false);
+                await RunBenchmark(1, 0, messageSize, 0, true);
             }
             Console.WriteLine();
 
             
-            //Here we target a specific message/sec target rate at the writer task
+/*            //Here we target a specific message/sec target rate at the writer task
             Console.WriteLine("---Roundtrip 1 pub 1 sub---");
             foreach (var messageSize in messageSizes)
             {
@@ -100,7 +100,7 @@
 
             Console.WriteLine();
             Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            Console.ReadKey();*/
         }
 
 
