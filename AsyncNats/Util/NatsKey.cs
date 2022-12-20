@@ -1,32 +1,9 @@
-﻿
-
-namespace EightyDecibel.AsyncNats
+﻿namespace EightyDecibel.AsyncNats
 {
     using System;
     using System.Runtime.CompilerServices;
     using System.Text;
-
-    public readonly ref struct NatsInlineKey
-    {
-        public static NatsInlineKey Empty()
-        {
-            return new NatsInlineKey(ReadOnlySpan<byte>.Empty);
-        }
-
-        public readonly ReadOnlySpan<byte> Span;
-
-        public NatsInlineKey(ReadOnlySpan<byte> span)
-        {
-            Span=span;
-        }
-
-        public string AsString()
-        {
-            return Encoding.UTF8.GetString(Span);
-        }
-
-    }
-
+    
     public readonly struct NatsKey : IEquatable<NatsKey>, IEquatable<string>
     {
         public static NatsKey Empty = new NatsKey(ReadOnlyMemory<byte>.Empty);
@@ -35,7 +12,7 @@ namespace EightyDecibel.AsyncNats
         public readonly ReadOnlyMemory<byte> Memory;
         private readonly string _string;
 
-        public NatsKey(ReadOnlyMemory<byte> value):this(value,false)
+        public NatsKey(ReadOnlyMemory<byte> value) : this(value, false)
         { }
 
         internal NatsKey(ReadOnlyMemory<byte> value, bool convert = false)

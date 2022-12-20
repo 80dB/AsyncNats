@@ -34,7 +34,6 @@
         private CancellationTokenSource? _disconnectSource;
         private ReadOnlyMemory<byte> _reconnectResendBuffer = ReadOnlyMemory<byte>.Empty;
 
-        //private readonly Channel<NatsMemoryOwner> _senderChannel;
         private readonly NatsPublishChannel _senderChannel;
         private readonly NatsRequestResponse _requestResponse;
         private readonly NatsMemoryPool _memoryPool;
