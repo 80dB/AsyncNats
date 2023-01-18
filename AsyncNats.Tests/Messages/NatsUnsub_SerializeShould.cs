@@ -14,8 +14,8 @@
         [Fact]
         public void BeSameWithoutMaxMessages()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, null);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsUnsub.Serialize(1, null);
+            var text = Encoding.UTF8.GetString(rented.Span);
 
             Assert.Equal("UNSUB 1\r\n", text);
         }
@@ -23,8 +23,8 @@
         [Fact]
         public void BeSameWitMaxMessages()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, 5);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsUnsub.Serialize( 1, 5);
+            var text = Encoding.UTF8.GetString(rented.Span);
 
             Assert.Equal("UNSUB 1 5\r\n", text);
         }
@@ -32,8 +32,8 @@
         [Fact]
         public void BeSameWitMaxMessages999()
         {
-            using var rented = NatsUnsub.RentedSerialize(new NatsMemoryPool(), 1, 999);
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsUnsub.Serialize(1, 999);
+            var text = Encoding.UTF8.GetString(rented.Span);
 
             Assert.Equal("UNSUB 1 999\r\n", text);
         }

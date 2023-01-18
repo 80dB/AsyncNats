@@ -1,20 +1,28 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
     using System.Buffers.Text;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
-    using System.Xml.Linq;
 
-    public class NatsUnsub : INatsClientMessage
+    public readonly struct NatsUnsub : INatsClientMessage
     {
         private static readonly ReadOnlyMemory<byte> _command = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("UNSUB "));
         private static readonly ReadOnlyMemory<byte> _del = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(" "));
         private static readonly ReadOnlyMemory<byte> _end = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("\r\n"));
+
+        public int Length => _length;
+
+        private readonly int _length;
+        private readonly ReadOnlyMemory<byte> _serialized;
         
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool, long subscriptionId, int? maxMessages)
+
+        public NatsUnsub(long subscriptionId, int? maxMessages)
+        {
+            _serialized = Serialize(subscriptionId, maxMessages);
+            _length = _serialized.Length;
+        }
+
+        public static ReadOnlyMemory<byte> Serialize(long subscriptionId, int? maxMessages)
         {
             Span<byte> subscriptionBytes = stackalloc byte[20]; // Max 20 - Uint64.MaxValue = 18446744073709551615 
             Utf8Formatter.TryFormat(subscriptionId, subscriptionBytes, out var subscriptionLength);
@@ -37,8 +45,7 @@
 
             hint += _end.Length;
 
-            var rented = pool.Rent(hint);
-            var buffer = rented.Memory;
+            var buffer = new byte[hint].AsMemory();
             _command.CopyTo(buffer);
             var consumed = _command.Length;
 
@@ -53,7 +60,12 @@
             }
 
             _end.CopyTo(buffer.Slice(consumed));
-            return rented;
+            return buffer;
+        }
+
+        public void Serialize(Span<byte> buffer)
+        {
+            _serialized.Span.CopyTo(buffer);
         }
     }
 }

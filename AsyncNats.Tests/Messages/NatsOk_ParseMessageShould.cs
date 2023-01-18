@@ -14,8 +14,7 @@
         [Fact]
         public void ReturnNatsOk()
         {
-            var reader = new SequenceReader<byte>();
-            var ok = NatsOk.ParseMessage(new NatsMemoryPool(), _message.Span, ref reader);
+            var ok = new NatsMessageParser().ParseOk();
             Assert.IsType<NatsOk>(ok);
         }
     }

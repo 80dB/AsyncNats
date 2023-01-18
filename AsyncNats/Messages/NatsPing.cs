@@ -1,25 +1,26 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
-    using System.IO.Pipelines;
     using System.Text;
-    using System.Threading.Tasks;
 
-    public class NatsPing : INatsServerMessage, INatsClientMessage
+    public class NatsPing : INatsClientMessage,INatsServerMessage
     {
-        private static readonly NoOwner<byte> _command = new NoOwner<byte>(Encoding.UTF8.GetBytes("PING\r\n"));
+        private static readonly ReadOnlyMemory<byte> _command = Encoding.UTF8.GetBytes("PING\r\n");
 
-        private static readonly NatsPing _instance = new NatsPing();
-        
-        public static INatsServerMessage? ParseMessage(NatsMemoryPool pool, in ReadOnlySpan<byte> line, ref SequenceReader<byte> reader)
+        public static readonly NatsPing Instance = new NatsPing();
+
+        public int Length => _command.Length;
+
+       
+
+        public void Serialize(Span<byte> buffer)
         {
-            return _instance;
+            _command.Span.CopyTo(buffer);
         }
 
-        public static IMemoryOwner<byte> RentedSerialize(NatsMemoryPool pool)
+        public static ReadOnlyMemory<byte> Serialize()
         {
-            return _command; 
+            return _command;
         }
     }
 }

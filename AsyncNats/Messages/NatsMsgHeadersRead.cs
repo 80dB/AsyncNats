@@ -1,8 +1,6 @@
 ﻿namespace EightyDecibel.AsyncNats.Messages
 {
     using System;
-    using System.Buffers;
-    using System.Buffers.Text;
     using System.Collections.Generic;
     using System.Linq;
     using System.Text;
@@ -14,15 +12,13 @@
         private static readonly ReadOnlyMemory<byte> _protocolVersion = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("NATS/1.0\r\n"));
 
         private readonly IEnumerable<KeyValuePair<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>>> _headers;
-
         public NatsMsgHeadersRead(ReadOnlyMemory<byte> data)
         {
             if (data.IsEmpty)
                 _headers = Enumerable.Empty<KeyValuePair<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>>>();
             else
                 _headers = ParseHeaders(data);
-        }
-        
+        }        
         
         public IEnumerable<KeyValuePair<string, string>> ReadAsString()
         {           
@@ -39,6 +35,82 @@
         {
             return _headers;
         }
+
+        public bool TryGetValue(ReadOnlySpan<byte> key, out ReadOnlyMemory<byte> value)
+        {
+            value = ReadOnlyMemory<byte>.Empty;
+
+            foreach (var (k, v) in _headers)
+            {                
+                if (k.Span.SequenceEqual(key))
+                {
+                    value = v;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        public bool TryGetValue(string key, out ReadOnlyMemory<byte> value)
+        {
+            value = null;
+
+            Span<byte> utf8Key = key.Length < 1024 ? stackalloc byte[Encoding.UTF8.GetMaxByteCount(key.Length)]
+                : new byte[Encoding.UTF8.GetMaxByteCount(key.Length)];
+
+            var chars = Encoding.UTF8.GetBytes(key, utf8Key);
+            utf8Key = utf8Key.Slice(0, chars);
+
+            foreach (var (k, v) in _headers)
+            {
+                if (k.Span.SequenceEqual(utf8Key))
+                {
+                    value = v;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool TryGetValueAsString(ReadOnlySpan<byte> key, out string? value)
+        {
+            value = null;
+
+            foreach (var (k, v) in _headers)
+            {
+                if (k.Span.SequenceEqual(key))
+                {
+                    value = Encoding.UTF8.GetString(v.Span);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool TryGetValueAsString(string key, out string? value)
+        {
+            value = null;
+
+            Span<byte> utf8Key = key.Length < 1024 ? stackalloc byte[Encoding.UTF8.GetMaxByteCount(key.Length)]
+                : new byte[Encoding.UTF8.GetMaxByteCount(key.Length)];
+            
+            var chars = Encoding.UTF8.GetBytes(key, utf8Key);
+            utf8Key = utf8Key.Slice(0, chars);
+
+            foreach (var (k, v) in _headers)
+            {
+                if (k.Span.SequenceEqual(utf8Key))
+                {
+                    value = Encoding.UTF8.GetString(v.Span);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static IEnumerable<KeyValuePair<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>>> ParseHeaders(ReadOnlyMemory<byte> data)
         {
             List<KeyValuePair<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>>> headers = new List<KeyValuePair<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>>>(4);
@@ -67,7 +139,6 @@
         
         
     }
-
 
 
 }

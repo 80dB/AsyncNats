@@ -1,43 +1,24 @@
 ﻿namespace EightyDecibel.AsyncNats
 {
-    using System;
     using System.Buffers;
-    using System.Runtime.CompilerServices;
-    using System.Text;
 
     public sealed class NatsMemoryPool 
     {
         private readonly ArrayPool<byte> _pool;
 
+        private static readonly ArrayPool<byte> _shared = ArrayPool<byte>.Create(1024 * 1024, 256);
+
         public NatsMemoryPool(ArrayPool<byte>? pool = null)
         {
-            _pool = pool ?? ArrayPool<byte>.Create(1024 * 1024, 256);
+            _pool = pool ?? _shared;
         }
 
-        public NatsMemoryOwner Rent(int minBufferSize = -1) => new NatsMemoryOwner(this, minBufferSize);
+        internal NatsMemoryOwner Rent(int minBufferSize) => new NatsMemoryOwner(_pool, minBufferSize);
 
-        public int MaxBufferSize => 1024 * 1024;
+        internal byte[] RentBuffer(int minBufferSize)=> _pool.Rent(minBufferSize);
 
-        public readonly struct NatsMemoryOwner : IMemoryOwner<byte>
-        {
-            private readonly NatsMemoryPool _owner;
+        internal void ReturnBuffer(byte[] buffer) => _pool.Return(buffer);
 
-            private readonly byte[] _buffer;
-            public NatsMemoryOwner(NatsMemoryPool owner, int length)
-            {
-                _owner = owner;
-                _buffer = owner._pool.Rent(length);
-
-                Memory = _buffer.AsMemory(0, length <= 0 ? _owner.MaxBufferSize : length);
-            }
-
-            public Memory<byte> Memory { get; }
-            public void Dispose() => _owner._pool.Return(_buffer);
-        }
-
-        
     }
-
-    
 
 }

@@ -1,12 +1,12 @@
-using System;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
-using EightyDecibel.AsyncNats.Messages;
-using Microsoft.Extensions.Logging;
-
 namespace EightyDecibel.AsyncNats
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using EightyDecibel.AsyncNats.Messages;
+    using Microsoft.Extensions.Logging;
+
     public class NatsRequestResponse
     {
         private static long _requestCount;

@@ -1,13 +1,12 @@
-﻿using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+﻿
 
 namespace EightyDecibel.AsyncNats
 {
     using System;
     using System.Buffers;
-    using System.IO.Pipelines;
     using System.Net;
+    using Microsoft.Extensions.Logging;
+    using System.Security.Cryptography;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
 
@@ -46,6 +45,7 @@ namespace EightyDecibel.AsyncNats
         public string RequestPrefix { get; set; }
 
         public ILoggerFactory? LoggerFactory { get; set; }
+        public bool LatencyMode { get; set; }
         public Func<INatsOptions, INatsServerPool> ServerPoolFactory { get; set; }
     }
 }

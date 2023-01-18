@@ -14,8 +14,8 @@
         [Fact]
         public void BeSame()
         {
-            using var rented = NatsPing.RentedSerialize(new NatsMemoryPool());
-            var text = Encoding.UTF8.GetString(rented.Memory.Span);
+            var rented = NatsPing.Serialize();
+            var text = Encoding.UTF8.GetString(rented.Span);
 
             Assert.Equal("PING\r\n", text);
         }

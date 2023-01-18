@@ -15,24 +15,21 @@
         [Fact]
         public void ReturnNatsError()
         {
-            var reader = new SequenceReader<byte>();
-            var err = NatsError.ParseMessage(new NatsMemoryPool(), _withErrorMessage.Span, ref reader);
+            var err = new NatsMessageParser().ParseError( _withErrorMessage.Span);
             Assert.IsType<NatsError>(err);
         }
 
         [Fact]
         public void WorkWithMessage()
         {
-            var reader = new SequenceReader<byte>();
-            var err = (NatsError) NatsError.ParseMessage(new NatsMemoryPool(), _withErrorMessage.Span, ref reader);
+            var err = new NatsMessageParser().ParseError(_withErrorMessage.Span);
             Assert.Equal("Stale Connection", err.Error);
         }
 
         [Fact]
         public void WorkWithoutMessage()
         {
-            var reader = new SequenceReader<byte>();
-            var err = (NatsError) NatsError.ParseMessage(new NatsMemoryPool(), _withoutErrorMessage.Span, ref reader);
+            var err = new NatsMessageParser().ParseError(_withoutErrorMessage.Span);
             Assert.Null(err.Error);
         }
     }
