@@ -336,7 +336,7 @@
 
                                 NatsInformation = info;
 
-                                _serverPool.SetDiscoveredServers(info.ConnectURLs);
+                                _serverPool.SetDiscoveredServers(info.ConnectUrls);
 
                                 ConnectionInformation?.Invoke(this, info);
                                 break;                            
@@ -500,7 +500,7 @@
             }
         }
               
-        internal async ValueTask PublishRaw(ReadOnlyMemory<byte> rawData,int messageCount, CancellationToken cancellationToken)
+        internal async ValueTask PublishRaw(byte[] rawData, int position, int messageCount, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
             var natsBuffer = new NatsPublishBuffer(rawData, position, messageCount);

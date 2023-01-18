@@ -48,7 +48,7 @@
 
         [JsonInclude]
         [JsonPropertyName("connect_urls")]
-        public string[] ConnectURLs { get; private set; }
+        public string[] ConnectUrls { get; private set; } = Array.Empty<string>();
 
         public override string ToString()
         {
