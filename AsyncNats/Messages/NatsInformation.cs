@@ -45,7 +45,10 @@
         [JsonInclude]
         [JsonPropertyName("client_id")]
         public int ClientId { get; private set; }
-        
+
+        [JsonInclude]
+        [JsonPropertyName("connect_urls")]
+        public string[] ConnectURLs { get; private set; }
 
         public override string ToString()
         {

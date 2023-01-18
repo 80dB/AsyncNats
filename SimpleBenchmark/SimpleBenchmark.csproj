@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>EightyDecibel.SimpleAsyncNatsSample</AssemblyName>
+    <AssemblyName>EightyDecibel.SimpleBenchmark</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

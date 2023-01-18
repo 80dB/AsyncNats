@@ -63,6 +63,11 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v1.0.3
+* @israellot added Servers property with Round-Robin and Random stratigy
+* @israellot added server-discovery
+* Breaking change: Removed "Server" property from INatsOptions / NatsDefaultOptions in favor of Servers property
+
 ### v1.0.2
 * Breaking changes:
   * Removed the PublishMemoryAsync/PublishTextAsync methods in favour of a single PublishAsync that handles both string and byte[] types

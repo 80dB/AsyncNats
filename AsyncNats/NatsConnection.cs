@@ -14,6 +14,8 @@
     using Rpc;
     using Microsoft.Extensions.Logging;
     using System.Collections.Concurrent;
+    using System.Net;
+    using System.Linq;
 
     public class NatsConnection : INatsConnection
     {
@@ -39,7 +41,6 @@
         private readonly NatsMemoryPool _memoryPool;
         private readonly ConcurrentDictionary<long, Subscription> _subscriptions = new ConcurrentDictionary<long, Subscription>();
         private readonly ConcurrentDictionary<long, InlineSubscription> _inlineSubscriptions = new ConcurrentDictionary<long, InlineSubscription>();
-
 
         private class Subscription
         {
@@ -96,6 +97,8 @@
         private NatsStatus _status;
         private readonly CancellationTokenSource _disposeTokenSource;
 
+        private INatsServerPool _serverPool;
+
         public INatsOptions Options { get; }
 
         public NatsStatus Status
@@ -139,6 +142,8 @@
             _requestResponse = new NatsRequestResponse(this);
 
             _logger = options.LoggerFactory?.CreateLogger<NatsConnection>();
+
+            _serverPool = options.ServerPoolFactory(options);
         }
 
         public ValueTask ConnectAsync()
@@ -165,6 +170,9 @@
         private async Task ReadWriteAsync(CancellationToken disconnectToken)
         {
             _logger?.LogTrace("Starting connection loop");
+
+            bool _isRetry = false;
+
             while (!disconnectToken.IsCancellationRequested)
             {
                 Status = NatsStatus.Connecting;
@@ -176,35 +184,46 @@
 
                 using var internalDisconnect = new CancellationTokenSource();
 
+                IPEndPoint ipEndpoint = null;
                 try
                 {
-                    _logger?.LogTrace("Connecting to {Server}", Options.Server);
-                    await socket.ConnectAsync(Options.Server);
+                    ipEndpoint = await _serverPool.SelectServer(_isRetry);
+                    _logger?.LogTrace("Connecting to {Server}", ipEndpoint);                    
+
+                    await socket.ConnectAsync(ipEndpoint);
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogError(ex, "Error connecting to {Server}", Options.Server);
+                    _logger?.LogError(ex, "Error connecting to {Server}", ipEndpoint);
                     ConnectionException?.Invoke(this, ex);
 
                     await Task.Delay(TimeSpan.FromSeconds(1), disconnectToken);
+
+                    _isRetry = true;
+
                     continue;
                 }
 
+                _isRetry = false;
                 _receiverQueueSize = 0;
 
                 var readPipe = new Pipe(new PipeOptions(pauseWriterThreshold: 1024 * 1024,useSynchronizationContext:false));
                 
                 // ReSharper disable AccessToDisposedClosure
-                var readTask = Task.Run(() => ReadSocketAsync(socket, readPipe.Writer, internalDisconnect.Token), internalDisconnect.Token);
-                var processTask = Task.Run(() => ProcessMessagesAsync(readPipe.Reader, internalDisconnect.Token), internalDisconnect.Token);
-                var writeTask = Task.Run(() => WriteSocketAsync(socket, internalDisconnect.Token), internalDisconnect.Token);
+
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(disconnectToken, internalDisconnect.Token);
+
+                var readTask = Task.Run(() => ReadSocketAsync(socket, readPipe.Writer, combinedCts.Token), combinedCts.Token);
+                var processTask = Task.Run(() => ProcessMessagesAsync(readPipe.Reader, combinedCts.Token), combinedCts.Token);
+                var writeTask = Task.Run(() => WriteSocketAsync(socket, combinedCts.Token), combinedCts.Token);
                 // ReSharper restore AccessToDisposedClosure
                 try
                 {
-                    _logger?.LogTrace("Connected to {Server}", Options.Server);
+                    _logger?.LogTrace("Connected to {Server}", ipEndpoint);
 
                     Status = NatsStatus.Connected;
-                    Task.WaitAny(new[] {readTask, processTask, writeTask}, disconnectToken);
+
+                    await Task.WhenAny(new[] { readTask, processTask, writeTask });
                 }
                 catch (OperationCanceledException)
                 {
@@ -216,9 +235,12 @@
                     ConnectionException?.Invoke(this, ex);
                 }
 
+                Status = NatsStatus.Connecting;
+
                 internalDisconnect.Cancel();
                 
                 _logger?.LogTrace("Waiting for read/write/process tasks to finish");
+
                 await WaitAll(readTask, processTask, writeTask);
             }
             _logger?.LogTrace("Exited connection loop");
@@ -310,9 +332,12 @@
                                 break;
 
                             case NatsInformation info:
-                                _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", Options.Server, info);
+                                _logger?.LogTrace("Received connection information for {Server}, {ConnectionInformation}", info.Host, info);
 
                                 NatsInformation = info;
+
+                                _serverPool.SetDiscoveredServers(info.ConnectURLs);
+
                                 ConnectionInformation?.Invoke(this, info);
                                 break;                            
                         }
@@ -458,7 +483,6 @@
             _disposeTokenSource.Cancel();
             _disposeTokenSource.Dispose();
         }
-
         public ValueTask PublishObjectAsync<T>(NatsKey subject, T payload, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
             return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo, headers, cancellationToken);
@@ -475,9 +499,8 @@
                 return WriteAsync(new NatsHPub(subject, replyTo ?? NatsKey.Empty, headers.Value, payload ?? NatsPayload.Empty), cancellationToken);
             }
         }
-
-#if !DISABLE_PUBLISH_RAW
-        public async ValueTask PublishRaw(byte[] rawData, int position, int messageCount, CancellationToken cancellationToken)
+              
+        internal async ValueTask PublishRaw(ReadOnlyMemory<byte> rawData,int messageCount, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
             var natsBuffer = new NatsPublishBuffer(rawData, position, messageCount);
@@ -486,7 +509,6 @@
             await tcs.Task;
             Interlocked.Add(ref _transmitMessagesTotal, messageCount);
         }
-#endif
 
         private ValueTask SendSubscribe(Subscription subscription, CancellationToken cancellationToken = default)
         {
