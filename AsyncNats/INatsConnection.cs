@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Runtime.CompilerServices;
     using System.Threading;
     using System.Threading.Tasks;
     using EightyDecibel.AsyncNats.Messages;
@@ -32,6 +33,9 @@
         IAsyncEnumerable<NatsTypedMsg<T>> Subscribe<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
         IAsyncEnumerable<T> SubscribeObject<T>(NatsKey subject, NatsKey? queueGroup = null, INatsSerializer? serializer = null, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> SubscribeText(NatsKey subject, NatsKey? queueGroup = null, CancellationToken cancellationToken = default);
+
+        IAsyncEnumerable<NatsMsg> SubscribeUnsafe(NatsKey subject, NatsKey? queueGroup = null, CancellationToken cancellationToken = default);
+        ValueTask SubscribeInline(NatsKey subject, NatsMessageInlineProcess process, NatsKey? queueGroup = null, CancellationToken cancellationToken = default);
 
         Task<byte[]> Request(NatsKey subject, NatsPayload request, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);
         Task<TResponse> RequestObject<TRequest, TResponse>(NatsKey subject, TRequest request, INatsSerializer? serializer = null, TimeSpan? timeout = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default);

@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29409.12
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AsyncNats", "AsyncNats\AsyncNats.csproj", "{D0350D61-7E8D-42EC-97E9-5867A8F962A6}"
 EndProject
@@ -21,9 +21,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LargeMessageAsyncNatsSample
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "InterfaceAsyncNatsSample", "InterfaceAsyncNatsSample\InterfaceAsyncNatsSample.csproj", "{0107099C-A20A-4118-A910-9AE23F4D58DE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LatencyAsyncNatsSample", "LatencyAsyncNatsSample\LatencyAsyncNatsSample.csproj", "{B041A048-1B70-41A0-9090-658090D8BDB5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LatencyAsyncNatsSample", "LatencyAsyncNatsSample\LatencyAsyncNatsSample.csproj", "{B041A048-1B70-41A0-9090-658090D8BDB5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleBenchmark", "SimpleBenchmark\SimpleBenchmark.csproj", "{E4E3DEA4-8686-4A26-9A58-1DD68F400DA0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0FD23138-82E7-4FE7-8952-C497F787FB82}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -19,9 +19,7 @@ There are currently no known issues. But the library has not been rigorously tes
 You can publish messages using any of the following methods:
 ```C#
 PublishObjectAsync // This method serializes the object with the supplied/default serializer
-PublishTextAsync // This method publishes a raw UTF8 encoded string
-PublishAsync // This method publishes a raw byte array
-PublishMemoryAsync // This method publishes a raw byte array (in the form of Memory<byte>)
+PublishAsync // This method publishes a raw byte array or a string as UTF8
 ```
 
 You can subscribe to subjects with the following methods:
@@ -42,9 +40,7 @@ await foreach(var message in connection.SubscribeText("HELLO"))
 
 There's also the option to perform requests using the following methods:
 ```C#
-Request // This method sends and receives a raw byte[]
-RequestMemory // This method sends and receives a raw byte[] in the form of Memory
-RequestText // This method sends and receives a UTF8 string
+Request // This method sends and receives a raw byte[], Memory<byte> or string
 RequestObject // This method sends and receives a serialized/deserialized object 
 ```
 
@@ -62,6 +58,12 @@ The contract has to be an interface and only supports methods (both sync/async).
 It's possible to have multiple contract servers running with a different base subject. This feature is still in experimental phase.
 
 ## Release history
+
+### v1.0.4
+* @israellot refactored several internal processes for (much) higher performance
+* @israellot added SubscribeInline. This subscription uses a callback inside of the receive-loop. Only use this if the callback is fast enough to handle the load!
+* @israellot added SubscribeUnsafe. The NatsMsg cannot be cached as it will get reclaimed on the next iteration.
+* @israellot added resend-on-reconnect. If connection with the Nats server is lost, the send-buffer gets resend after reconnecting.
 
 ### v1.0.3
 * @israellot added Servers property with Round-Robin and Random stratigy

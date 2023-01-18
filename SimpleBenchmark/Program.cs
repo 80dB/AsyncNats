@@ -464,11 +464,11 @@
                         }                        
                     }
 
-                    if(readerType==ReaderType.Inline)
+                    if(readerType == ReaderType.Inline)
                     {
-                        await connection.SubscribeUnsafe(subject, Process, cancellationToken: cancellationToken);
+                        await connection.SubscribeInline(subject, Process, cancellationToken: cancellationToken);
                     }
-                    else if(readerType ==ReaderType.Unsafe)
+                    else if(readerType == ReaderType.Unsafe)
                     {
                         await foreach (var message in connection.SubscribeUnsafe(subject, cancellationToken: cancellationToken))
                         {

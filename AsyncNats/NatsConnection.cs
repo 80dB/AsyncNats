@@ -15,7 +15,6 @@
     using Microsoft.Extensions.Logging;
     using System.Collections.Concurrent;
     using System.Net;
-    using System.Linq;
 
     public class NatsConnection : INatsConnection
     {
@@ -483,6 +482,7 @@
             _disposeTokenSource.Cancel();
             _disposeTokenSource.Dispose();
         }
+
         public ValueTask PublishObjectAsync<T>(NatsKey subject, T payload, NatsKey? replyTo = null, NatsMsgHeaders? headers = null, CancellationToken cancellationToken = default)
         {
             return PublishAsync(subject, Options.Serializer.Serialize(payload), replyTo, headers, cancellationToken);
@@ -524,7 +524,7 @@
             return WriteAsync(new NatsUnsub( subscription.SubscriptionId, null), CancellationToken.None);
         }
 
-        private async ValueTask InternalInlineSubscribe(NatsKey subject, NatsKey? queueGroup,NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
+        private async ValueTask InternalInlineSubscribe(NatsKey subject, NatsMessageInlineProcess process, NatsKey? queueGroup = null, CancellationToken cancellationToken = default)
         {
             var subscription = new InlineSubscription(subject, queueGroup, Interlocked.Increment(ref _nextSubscriptionId), process);
 
@@ -626,15 +626,10 @@
                 }
             }
         }
-                
-        public async ValueTask SubscribeUnsafe(NatsKey subject, NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
-        {          
-            await InternalInlineSubscribe(subject, NatsKey.Empty, process, cancellationToken);
-        }
         
-        public async ValueTask SubscribeUnsafe(NatsKey subject, NatsKey queueGroup,NatsMessageInlineProcess process, CancellationToken cancellationToken = default)
+        public async ValueTask SubscribeInline(NatsKey subject, NatsMessageInlineProcess process, NatsKey? queueGroup = null, CancellationToken cancellationToken = default)
         {
-            await InternalInlineSubscribe(subject, queueGroup, process, cancellationToken);
+            await InternalInlineSubscribe(subject, process, queueGroup, cancellationToken);
         }
 
         public async IAsyncEnumerable<string> SubscribeText(NatsKey subject, NatsKey? queueGroup = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
