@@ -22,6 +22,12 @@ The end result is very fast Nats.io client that, in our opinion, fits the C# 8.0
     <Version>1.0.4</Version>
     <PackageIcon>logo.png</PackageIcon>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<PackageReleaseNotes>### v1.0.4
+* @israellot refactored several internal processes for (much) higher performance
+* @israellot added SubscribeInline. This subscription uses a callback inside of the receive-loop. Only use this if the callback is fast enough to handle the load!
+* @israellot added SubscribeUnsafe. The NatsMsg cannot be cached as it will get reclaimed on the next iteration.
+* @israellot added resend-on-reconnect. If connection with the Nats server is lost, the send-buffer gets resend after reconnecting.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +42,10 @@ The end result is very fast Nats.io client that, in our opinion, fits the C# 8.0
       <Pack>True</Pack>
       <PackagePath></PackagePath>
     </None>
+	  <None Include="..\README.md">
+		  <Pack>True</Pack>
+		  <PackagePath></PackagePath>
+	  </None>
   </ItemGroup>
 
 </Project>
