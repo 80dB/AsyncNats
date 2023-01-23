@@ -81,7 +81,7 @@ namespace EightyDecibel.AsyncNats.Rpc
                     }
                     else
                     {
-                        throw new KeyNotFoundException("Unknown method");
+                        throw new KeyNotFoundException($"Unknown method {typeof(TContract).Name}.{method}");
                     }
                 }
                 catch (OperationCanceledException)
