@@ -17,17 +17,22 @@ The end result is very fast Nats.io client that, in our opinion, fits the C# 8.0
     <RepositoryUrl>https://github.com/80dB/AsyncNats</RepositoryUrl>
     <PackageTags>async, nats.io</PackageTags>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <AssemblyVersion>1.0.4</AssemblyVersion>
-    <FileVersion>1.0.4</FileVersion>
-    <Version>1.0.4</Version>
+    <AssemblyVersion>1.0.5</AssemblyVersion>
+    <FileVersion>1.0.5</FileVersion>
+    <Version>1.0.5</Version>
     <PackageIcon>logo.png</PackageIcon>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
-	<PackageReleaseNotes>### v1.0.4
-* @israellot refactored several internal processes for (much) higher performance
-* @israellot added SubscribeInline. This subscription uses a callback inside of the receive-loop. Only use this if the callback is fast enough to handle the load!
-* @israellot added SubscribeUnsafe. The NatsMsg cannot be cached as it will get reclaimed on the next iteration.
-* @israellot added resend-on-reconnect. If connection with the Nats server is lost, the send-buffer gets resend after reconnecting.</PackageReleaseNotes>
+	<PackageReleaseNotes>
+		### v1.0.5
+		* High load could lead to a memory corruption issue in Request/Response/RPC scenario's
+
+		### v1.0.4
+		* @israellot refactored several internal processes for (much) higher performance
+		* @israellot added SubscribeInline. This subscription uses a callback inside of the receive-loop. Only use this if the callback is fast enough to handle the load!
+		* @israellot added SubscribeUnsafe. The NatsMsg cannot be cached as it will get reclaimed on the next iteration.
+		* @israellot added resend-on-reconnect. If connection with the Nats server is lost, the send-buffer gets resend after reconnecting.
+	</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

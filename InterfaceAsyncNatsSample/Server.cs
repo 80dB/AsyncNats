@@ -7,9 +7,10 @@
     {
         private Random _random = new Random();
 
-        public Task<int> MultiplyAsync(int x, int y)
+        public async Task<int> MultiplyAsync(int x, int y)
         {
-            return Task.FromResult(x*y);
+            await Task.Yield();
+            return x*y;
         }
 
         public int Add(int x, int y)

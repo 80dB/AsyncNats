@@ -1,4 +1,6 @@
-﻿namespace InterfaceAsyncNatsSample
+﻿using System.Linq;
+
+namespace InterfaceAsyncNatsSample
 {
     using EightyDecibel.AsyncNats;
     using System;
@@ -51,7 +53,7 @@
 
             var client = connection.GenerateContractClient<IContract>("IContract");
             var result = await client.MultiplyAsync(10, 10);
-            Console.WriteLine("Multiply Result: {0}", result);
+            Console.WriteLine("Multiply Result: 10 * 10 = {0}", result);
             
             result = client.Add(10, 10);
             Console.WriteLine("Add Result: {0}", result);
@@ -96,6 +98,25 @@
             {
                 Console.WriteLine("Expected exception: {0}", ex.Message);
             }
+
+
+            Console.WriteLine("High performance consistency testing");
+
+            var tasks = Enumerable.Range(0, 50).Select(x => Task.Run(async () =>
+            {
+                for (var i = 0; i < 1000; i++)
+                {
+                    var y = await client.MultiplyAsync(x, i);
+                    if (y != x * i)
+                    {
+                        Console.WriteLine($"Failure... {x} * {i} = {y}");
+                    }
+                }
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            Console.WriteLine("Completed high performance consistency testing");
 
             var counter = 0;
             var started = DateTime.UtcNow;

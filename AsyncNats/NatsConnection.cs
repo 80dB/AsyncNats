@@ -596,7 +596,8 @@
         {
             static NatsMsg Deserialize(NatsMsg msg)
             {
-                return new NatsMsg(msg.Subject, msg.SubscriptionId, msg.ReplyTo, msg.Payload.ToArray());
+                // NOTE: The subject/reply-to has to be copied using 'AsString' because otherwise it would be using rented memory and could be freed before used
+                return new NatsMsg(msg.Subject.AsString(), msg.SubscriptionId, msg.ReplyTo.AsString(), msg.Payload.ToArray());
             }
 
             await foreach (var msg in InternalSubscribe(subject, queueGroup, cancellationToken))

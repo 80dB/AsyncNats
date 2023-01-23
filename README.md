@@ -59,6 +59,9 @@ It's possible to have multiple contract servers running with a different base su
 
 ## Release history
 
+### v1.0.5
+* High load could lead to a memory corruption issue in Request/Response/RPC scenario's
+
 ### v1.0.4
 * @israellot refactored several internal processes for (much) higher performance
 * @israellot added SubscribeInline. This subscription uses a callback inside of the receive-loop. Only use this if the callback is fast enough to handle the load!
