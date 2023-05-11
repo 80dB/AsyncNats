@@ -1,3 +1,6 @@
+# Archived
+Due to the fact that 80dB (the company) went bankrupt, this repository will no longer be maintained and the component will no longer receive updates.
+
 # AsyncNats
 A Nats.IO client specifically written with new C# features in mind. Internally it uses the new System.IO.Pipelines and System.Threading.Channels libraries that were released last year. It also uses the new IAsyncEnumerable as a way to listen to messages published to subjects.
 
